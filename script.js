@@ -1,63 +1,48 @@
 
-/*
- * 학교 설정
- * ATPT_OFCDC_SC_CODE: 시도교육청 코드
- * SD_SCHUL_CODE: 학교 코드
- *
- * 공개 저장소에 실제 인증키를 직접 올리지 마세요.
- */
-const SCHOOL = {
-  name: "우리 학교",
-  officeCode: "여기에_교육청_코드",
-  schoolCode: "여기에_학교_코드"
-};
-
-const API_KEY = ""; // 로컬 테스트용. 공개 저장소에 실제 키를 넣지 마세요.
-
-const API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo";
-
-const mealNames = {
-  "1": "아침",
-  "2": "점심",
-  "3": "저녁"
-};
-
-const mealEmojis = {
-  "1": "🌅",
-  "2": "🍚",
-  "3": "🌙"
-};
+"use strict";
 
 const $ = (id) => document.getElementById(id);
 
-function localDate(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+const MEALS = [
+  { code: "1", name: "아침", emoji: "🌅", time: "BREAKFAST" },
+  { code: "2", name: "점심", emoji: "🍚", time: "LUNCH" },
+  { code: "3", name: "저녁", emoji: "🌙", time: "DINNER" }
+];
+
+let mealData = [];
+let dataUpdatedAt = "";
+let requestVersion = 0;
+
+function getKoreanToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const values = {};
+  parts.forEach(part => {
+    values[part.type] = part.value;
+  });
+
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function parseDate(value) {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function shiftDate(value, amount) {
-  const date = parseDate(value);
-  date.setDate(date.getDate() + amount);
-  return localDate(date);
-}
-
-function mondayOf(value) {
-  const date = parseDate(value);
-  const day = date.getDay();
-  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
-  return localDate(date);
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
 }
 
 function formatDate(value) {
   const date = parseDate(value);
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long"
+  }).format(date);
 }
 
 function formatShort(value) {
@@ -65,15 +50,50 @@ function formatShort(value) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-function showStatus(element, message) {
-  element.replaceChildren();
-  const p = document.createElement("p");
-  p.className = "status";
-  p.textContent = message;
-  element.appendChild(p);
+function addDays(value, amount) {
+  const date = parseDate(value);
+  date.setDate(date.getDate() + amount);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
-function splitMenus(text = "") {
+function mondayOf(value) {
+  const date = parseDate(value);
+  const weekday = date.getDay();
+  const difference = weekday === 0 ? -6 : 1 - weekday;
+
+  date.setDate(date.getDate() + difference);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dateKey(value) {
+  return value.replaceAll("-", "");
+}
+
+function getMealsForDate(value) {
+  const key = dateKey(value);
+
+  return mealData.filter(row =>
+    row.MLSV_YMD === key
+  );
+}
+
+function getMeal(code, value) {
+  return getMealsForDate(value).find(row =>
+    String(row.MMEAL_SC_CODE) === code
+  );
+}
+
+function parseMenu(text = "") {
   return text
     .split(/<br\s*\/?>/i)
     .map(item => item.trim())
@@ -81,229 +101,243 @@ function splitMenus(text = "") {
 }
 
 function cleanMenu(text) {
-  return text
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  // 알레르기 번호를 보존하기 위해 괄호 내용은 삭제하지 않는다.
+  return text.replace(/\s+/g, " ").trim();
 }
 
-function makeMenuList(items) {
-  const ul = document.createElement("ul");
-  ul.className = "menu-list";
+function makeMenuList(items, className = "menu-list") {
+  const list = document.createElement("ul");
+  list.className = className;
 
   items.forEach(item => {
     const li = document.createElement("li");
-    li.textContent = "• " + cleanMenu(item);
-    ul.appendChild(li);
+    li.textContent = cleanMenu(item);
+    list.appendChild(li);
   });
 
-  return ul;
+  return list;
 }
 
-function makeMealCard(code, row) {
+function showStatus(element, message) {
+  element.replaceChildren();
+
+  const p = document.createElement("p");
+  p.className = "status";
+  p.textContent = message;
+
+  element.appendChild(p);
+}
+
+function makeMealCard(meal, row) {
   const card = document.createElement("article");
   card.className = "meal-card";
 
+  const top = document.createElement("div");
+  top.className = "meal-card-top";
+
   const emoji = document.createElement("div");
-  emoji.className = "emoji";
-  emoji.textContent = mealEmojis[code];
+  emoji.className = "meal-emoji";
+  emoji.textContent = meal.emoji;
+
+  const time = document.createElement("span");
+  time.className = "meal-time";
+  time.textContent = meal.time;
+
+  top.append(emoji, time);
 
   const title = document.createElement("h3");
-  title.textContent = mealNames[code];
+  title.textContent = meal.name;
 
-  const desc = document.createElement("p");
-  desc.className = "muted";
-  desc.textContent = row ? "오늘의 식단" : "급식 정보 없음";
+  const subtitle = document.createElement("div");
+  subtitle.className = "meal-subtitle";
+  subtitle.textContent = row ? "오늘의 식단" : "등록된 식단 없음";
 
-  card.append(emoji, title, desc);
+  card.append(top, title, subtitle);
 
   if (row) {
-    const menus = splitMenus(row.DDISH_NM || "");
-    card.appendChild(makeMenuList(menus));
+    card.appendChild(makeMenuList(parseMenu(row.DDISH_NM)));
 
-    const calories = document.createElement("p");
-    calories.className = "calories";
+    const calories = document.createElement("div");
+    calories.className = "meal-calories";
     calories.textContent = row.CAL_INFO
-      ? `열량 ${row.CAL_INFO}`
-      : "열량 정보 없음";
+      ? `총 열량 · ${row.CAL_INFO}`
+      : "열량 정보가 제공되지 않습니다.";
+
     card.appendChild(calories);
   } else {
-    const message = document.createElement("p");
-    message.className = "muted";
-    message.textContent = "이 날짜에 등록된 식단이 없습니다.";
-    card.appendChild(message);
+    const none = document.createElement("p");
+    none.className = "day-none";
+    none.textContent = "이 날짜에는 등록된 급식 정보가 없습니다.";
+    card.appendChild(none);
   }
 
   return card;
 }
 
-async function fetchMeals(from, to) {
-  const params = {
-    Type: "json",
-    ATPT_OFCDC_SC_CODE: SCHOOL.officeCode,
-    SD_SCHUL_CODE: SCHOOL.schoolCode,
-    MLSV_FROM_YMD: from.replaceAll("-", ""),
-    MLSV_TO_YMD: to.replaceAll("-", ""),
-    pSize: "1000"
-  };
-
-  if (API_KEY.trim()) params.KEY = API_KEY.trim();
-
-  const query = new URLSearchParams(params);
-  const response = await fetch(`${API_URL}?${query}`);
-
-  if (!response.ok) {
-    throw new Error(`서버 응답 오류 (${response.status})`);
-  }
-
-  const data = await response.json();
-
-  if (!data.mealServiceDietInfo) {
-    const result = data.RESULT || {};
-
-    if (result.CODE === "INFO-200") return [];
-
-    throw new Error(
-      result.MESSAGE || "급식 정보를 가져오지 못했습니다."
-    );
-  }
-
-  return data.mealServiceDietInfo[1]?.row || [];
-}
-
-function groupByDate(rows) {
-  const grouped = {};
-
-  rows.forEach(row => {
-    const date = row.MLSV_YMD;
-    const code = row.MMEAL_SC_CODE;
-
-    if (!grouped[date]) grouped[date] = {};
-    grouped[date][code] = row;
-  });
-
-  return grouped;
-}
-
-async function renderMeals() {
+function renderDaily() {
   const selected = $("selectedDate").value;
   if (!selected) return;
 
   $("dateLabel").textContent = formatDate(selected);
-  showStatus($("mealCards"), "급식 정보를 불러오는 중...");
 
-  try {
-    const rows = await fetchMeals(selected, selected);
-    const meals = groupByDate(rows)[selected.replaceAll("-", "")] || {};
+  const cards = MEALS.map(meal =>
+    makeMealCard(meal, getMeal(meal.code, selected))
+  );
 
-    $("mealCards").replaceChildren(
-      ...["1", "2", "3"].map(code =>
-        makeMealCard(code, meals[code])
-      )
-    );
-  } catch (error) {
-    showStatus(
-      $("mealCards"),
-      `급식을 불러오지 못했습니다: ${error.message}`
-    );
-  }
+  $("mealCards").replaceChildren(...cards);
 }
 
-async function renderWeek() {
+function makeDayCard(value) {
+  const card = document.createElement("article");
+  card.className = "day-card";
+
+  if (value === getKoreanToday()) {
+    card.classList.add("today");
+  }
+
+  const header = document.createElement("div");
+  header.className = "day-card-header";
+
+  const date = parseDate(value);
+  const weekday = new Intl.DateTimeFormat("ko-KR", {
+    weekday: "long"
+  }).format(date);
+
+  const dayName = document.createElement("h3");
+  dayName.className = "day-name";
+  dayName.textContent = weekday;
+
+  const dayDate = document.createElement("div");
+  dayDate.className = "day-date";
+  dayDate.textContent = formatShort(value);
+
+  header.append(dayName, dayDate);
+  card.appendChild(header);
+
+  MEALS.forEach(meal => {
+    const section = document.createElement("div");
+    section.className = "day-meal";
+
+    const label = document.createElement("div");
+    label.className = "day-meal-label";
+    label.textContent = meal.name;
+    section.appendChild(label);
+
+    const row = getMeal(meal.code, value);
+
+    if (row) {
+      section.appendChild(
+        makeMenuList(parseMenu(row.DDISH_NM), "day-menu")
+      );
+    } else {
+      const none = document.createElement("div");
+      none.className = "day-none";
+      none.textContent = "등록된 식단 없음";
+      section.appendChild(none);
+    }
+
+    card.appendChild(section);
+  });
+
+  return card;
+}
+
+function renderWeekly() {
   const selected = $("selectedDate").value;
   if (!selected) return;
 
-  const start = mondayOf(selected);
-  const end = shiftDate(start, 4);
+  const monday = mondayOf(selected);
+  const friday = addDays(monday, 4);
 
   $("weekLabel").textContent =
-    `${formatDate(start)} ~ ${formatDate(end)}`;
+    `${formatShort(monday)} ~ ${formatShort(friday)}`;
 
+  const cards = [];
+
+  for (let i = 0; i < 5; i++) {
+    cards.push(makeDayCard(addDays(monday, i)));
+  }
+
+  $("weekTable").replaceChildren(...cards);
+}
+
+function renderAll() {
+  renderDaily();
+  renderWeekly();
+}
+
+async function loadMealData() {
+  const currentVersion = ++requestVersion;
+
+  showStatus($("mealCards"), "급식 데이터를 불러오는 중...");
   showStatus($("weekTable"), "주간 식단을 불러오는 중...");
 
   try {
-    const rows = await fetchMeals(start, end);
-    const grouped = groupByDate(rows);
-
-    const cards = Array.from({ length: 5 }, (_, i) => {
-      const date = shiftDate(start, i);
-      const key = date.replaceAll("-", "");
-      const meals = grouped[key] || {};
-
-      const card = document.createElement("article");
-      card.className = "day-card";
-
-      const title = document.createElement("h3");
-      const weekday = ["월", "화", "수", "목", "금"][i];
-      title.textContent = `${weekday}요일`;
-
-      const dateText = document.createElement("p");
-      dateText.className = "day-date";
-      dateText.textContent = formatShort(date);
-
-      card.append(title, dateText);
-
-      ["1", "2", "3"].forEach(code => {
-        const label = document.createElement("p");
-        label.className = "meal-name";
-        label.textContent = mealNames[code];
-
-        card.appendChild(label);
-
-        const row = meals[code];
-        if (row) {
-          card.appendChild(makeMenuList(splitMenus(row.DDISH_NM)));
-        } else {
-          const none = document.createElement("p");
-          none.className = "muted";
-          none.textContent = "등록된 식단 없음";
-          card.appendChild(none);
-        }
-      });
-
-      return card;
+    const response = await fetch("./meals.json", {
+      cache: "no-store"
     });
 
-    $("weekTable").replaceChildren(...cards);
+    if (!response.ok) {
+      throw new Error(`데이터 파일 요청 실패 (${response.status})`);
+    }
+
+    const data = await response.json();
+
+    if (currentVersion !== requestVersion) return;
+
+    if (!Array.isArray(data.meals)) {
+      throw new Error("급식 데이터 형식이 올바르지 않습니다.");
+    }
+
+    mealData = data.meals;
+    dataUpdatedAt = data.updatedAt || "";
+
+    $("updatedAt").textContent = dataUpdatedAt
+      ? `데이터 기준일: ${dataUpdatedAt}`
+      : "데이터 갱신 시각 정보 없음";
+
+    renderAll();
   } catch (error) {
-    showStatus(
-      $("weekTable"),
-      `주간 식단을 불러오지 못했습니다: ${error.message}`
-    );
+    if (currentVersion !== requestVersion) return;
+
+    const message =
+      "급식 데이터를 불러오지 못했습니다. " +
+      "잠시 후 다시 시도하거나 GitHub Actions 실행 상태를 확인해 주세요.";
+
+    showStatus($("mealCards"), message);
+    showStatus($("weekTable"), message);
+    $("updatedAt").textContent = "데이터 연결 오류";
+    console.error(error);
   }
 }
 
-async function renderAll() {
-  await Promise.all([renderMeals(), renderWeek()]);
+function selectDate(value) {
+  $("selectedDate").value = value;
+  renderAll();
 }
 
-$("selectedDate").value = localDate();
+$("selectedDate").value = getKoreanToday();
 
 $("selectedDate").addEventListener("change", renderAll);
 
 $("prevDay").addEventListener("click", () => {
-  $("selectedDate").value = shiftDate($("selectedDate").value, -1);
-  renderAll();
+  selectDate(addDays($("selectedDate").value, -1));
 });
 
 $("nextDay").addEventListener("click", () => {
-  $("selectedDate").value = shiftDate($("selectedDate").value, 1);
-  renderAll();
+  selectDate(addDays($("selectedDate").value, 1));
 });
 
 $("todayBtn").addEventListener("click", () => {
-  $("selectedDate").value = localDate();
-  renderAll();
+  selectDate(getKoreanToday());
 });
 
 $("prevWeek").addEventListener("click", () => {
-  $("selectedDate").value = shiftDate($("selectedDate").value, -7);
-  renderAll();
+  selectDate(addDays($("selectedDate").value, -7));
 });
 
 $("nextWeek").addEventListener("click", () => {
-  $("selectedDate").value = shiftDate($("selectedDate").value, 7);
-  renderAll();
+  selectDate(addDays($("selectedDate").value, 7));
 });
 
-renderAll();
+loadMealData();
