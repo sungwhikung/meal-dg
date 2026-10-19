@@ -3,65 +3,93 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f6f8fc">
-  <title>우리 학교 급식</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js" defer></script>
+  <meta name="description" content="논산대건고등학교 오늘의 급식과 주간 식단표">
+  <title>대건밀 - 논산대건고등학교 급식</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./script.js" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./">MEAL<span>DAY</span></a>
-    <span class="live">NEIS 급식 정보</span>
+    <a class="brand" href="./" aria-label="대건밀 홈">
+      <span class="brand-icon">M</span>
+      <span>대건밀<span class="brand-dot">.</span></span>
+    </a>
+    <span class="school-label">논산대건고등학교</span>
   </header>
 
   <main class="container">
     <section class="hero">
-      <p class="eyebrow">SCHOOL MEAL SERVICE</p>
-      <h1>오늘 뭐 먹지? 🍚</h1>
-      <p class="muted">우리 학교의 급식 정보를 한눈에 확인해 봐.</p>
+      <span class="eyebrow">SCHOOL MEAL SERVICE</span>
+      <h1>오늘 뭐 먹지<span class="question-mark">?</span></h1>
+      <p class="hero-description">
+        오늘의 급식부터 이번 주 식단까지 한눈에.
+      </p>
 
-      <div class="date-control">
-        <button id="prevDay" aria-label="이전 날짜">←</button>
-        <input type="date" id="selectedDate">
-        <button id="nextDay" aria-label="다음 날짜">→</button>
-        <button id="todayBtn" class="today-btn">오늘</button>
+      <div class="date-toolbar">
+        <button class="icon-button" id="prevDay" aria-label="전날">←</button>
+        <label class="date-input-wrap">
+          <span class="calendar-icon">▦</span>
+          <input id="selectedDate" type="date" aria-label="조회 날짜">
+        </label>
+        <button class="icon-button" id="nextDay" aria-label="다음 날">→</button>
+        <button class="today-button" id="todayBtn">오늘</button>
       </div>
+
+      <p class="date-caption" id="dateLabel">날짜 확인 중...</p>
     </section>
 
     <section class="section">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">DAILY MENU</p>
+          <span class="eyebrow">DAILY MENU</span>
           <h2>오늘의 식단</h2>
         </div>
-        <span id="dateLabel" class="muted"></span>
+        <span class="section-note">아침 · 점심 · 저녁</span>
       </div>
-      <div id="mealCards" class="meal-grid">
+      <div id="mealCards" class="meal-grid" aria-live="polite">
         <p class="status">급식 정보를 불러오는 중...</p>
       </div>
     </section>
 
-    <section class="section">
+    <section class="section weekly-section">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">WEEKLY MENU</p>
+          <span class="eyebrow">WEEKLY MENU</span>
           <h2>주간 급식표</h2>
         </div>
-        <div class="week-control">
-          <button id="prevWeek" aria-label="이전 주">←</button>
-          <button id="nextWeek" aria-label="다음 주">→</button>
+        <div class="week-controls">
+          <button class="icon-button" id="prevWeek" aria-label="이전 주">←</button>
+          <button class="icon-button" id="nextWeek" aria-label="다음 주">→</button>
         </div>
       </div>
-      <p id="weekLabel" class="muted"></p>
-      <div id="weekTable" class="week-grid">
-        <p class="status">주간 식단을 불러오는 중...</p>
+
+      <p class="week-label" id="weekLabel"></p>
+
+      <div class="table-scroll">
+        <div id="weekTable" class="week-grid" aria-live="polite">
+          <p class="status">주간 식단을 불러오는 중...</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-panel">
+      <div class="info-icon">i</div>
+      <div>
+        <strong>급식 정보 안내</strong>
+        <p>
+          식단은 NEIS에 등록된 정보를 기준으로 표시합니다.
+          실제 제공 메뉴와 변경 사항은 학교 공지를 확인하세요.
+        </p>
       </div>
     </section>
 
     <footer>
-      <p>급식 데이터 출처: 교육부 나이스 교육정보 개방 포털</p>
-      <p>실제 식단은 학교의 공지와 현장 안내를 확인해 주세요.</p>
+      <div class="footer-brand">대건밀<span class="brand-dot">.</span></div>
+      <p>데이터 출처: 교육부 나이스 교육정보 개방 포털</p>
+      <p id="updatedAt">데이터 갱신 시각 확인 중...</p>
+      <p>본 사이트는 학교 공식 홈페이지와 별개인 비공식 서비스입니다.</p>
     </footer>
   </main>
 </body>
