@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f8fc">
+  <title>우리 학교 급식</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">MEAL<span>DAY</span></a>
+    <span class="live">NEIS 급식 정보</span>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <p class="eyebrow">SCHOOL MEAL SERVICE</p>
+      <h1>오늘 뭐 먹지? 🍚</h1>
+      <p class="muted">우리 학교의 급식 정보를 한눈에 확인해 봐.</p>
+
+      <div class="date-control">
+        <button id="prevDay" aria-label="이전 날짜">←</button>
+        <input type="date" id="selectedDate">
+        <button id="nextDay" aria-label="다음 날짜">→</button>
+        <button id="todayBtn" class="today-btn">오늘</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DAILY MENU</p>
+          <h2>오늘의 식단</h2>
+        </div>
+        <span id="dateLabel" class="muted"></span>
+      </div>
+      <div id="mealCards" class="meal-grid">
+        <p class="status">급식 정보를 불러오는 중...</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">WEEKLY MENU</p>
+          <h2>주간 급식표</h2>
+        </div>
+        <div class="week-control">
+          <button id="prevWeek" aria-label="이전 주">←</button>
+          <button id="nextWeek" aria-label="다음 주">→</button>
+        </div>
+      </div>
+      <p id="weekLabel" class="muted"></p>
+      <div id="weekTable" class="week-grid">
+        <p class="status">주간 식단을 불러오는 중...</p>
+      </div>
+    </section>
+
+    <footer>
+      <p>급식 데이터 출처: 교육부 나이스 교육정보 개방 포털</p>
+      <p>실제 식단은 학교의 공지와 현장 안내를 확인해 주세요.</p>
+    </footer>
+  </main>
+</body>
+</html>
