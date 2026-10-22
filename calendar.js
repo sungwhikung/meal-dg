@@ -380,7 +380,7 @@ $("adminLogout").addEventListener("click", async () => {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
-  isAdmin = Boolean(user && user.uid === ADMIN_UID);
+  isAdmin = Boolean(user && user.uid = mxrtFi3CiGca2DCafbRlalT1eHB3);
 
   updateAuthUI();
 
