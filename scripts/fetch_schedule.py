@@ -1,6 +1,6 @@
+
 import json
 import os
-import calendar
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -8,31 +8,21 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 API_URL = "https://open.neis.go.kr/hub/SchoolSchedule"
+
 SCHOOL_NAME = "논산대건고등학교"
 OFFICE_CODE = "N10"
 SCHOOL_CODE = "8140085"
 
 API_KEY = os.environ.get("NEIS_API_KEY", "").strip()
+
 if not API_KEY:
-    raise RuntimeError("NEIS_API_KEY Secret이 없습니다.")
+    raise RuntimeError(
+        "NEIS_API_KEY가 없습니다. GitHub Actions Secrets를 확인하세요."
+    )
 
 today = datetime.now(ZoneInfo("Asia/Seoul")).date()
-
-
-def shift_month(year, month, delta):
-    index = year * 12 + month - 1 + delta
-    return index // 12, index % 12 + 1
-
-
-start_year, start_month = shift_month(today.year, today.month, -1)
-end_year, end_month = shift_month(today.year, today.month, 12)
-
-start_date = date(start_year, start_month, 1)
-end_date = date(
-    end_year,
-    end_month,
-    calendar.monthrange(end_year, end_month)[1]
-)
+start_date = date(today.year, 1, 1)
+end_date = date(today.year + 1, 12, 31)
 
 params = {
     "KEY": API_KEY,
@@ -46,57 +36,53 @@ params = {
 }
 
 url = API_URL + "?" + urlencode(params)
-request = Request(url, headers={"User-Agent": "DaegunMealSite/1.0"})
+
+request = Request(
+    url,
+    headers={"User-Agent": "NonsanDaegunMealSite/1.0"}
+)
 
 with urlopen(request, timeout=30) as response:
     payload = json.loads(response.read().decode("utf-8"))
 
+rows = []
+
 if "RESULT" in payload:
     result = payload["RESULT"]
-    if result.get("CODE") == "INFO-200":
-        rows = []
-    else:
-        raise RuntimeError(
-            f"NEIS 학사일정 오류: "
-            f"{result.get('CODE')} - {result.get('MESSAGE')}"
-        )
+    code = result.get("CODE", "")
+    message = result.get("MESSAGE", "")
+
+    if code != "INFO-200":
+        raise RuntimeError(f"NEIS 학사일정 API 오류: {code} - {message}")
 else:
     sections = payload.get("SchoolSchedule", [])
-    rows = sections[1].get("row", []) if len(sections) >= 2 else []
+    if len(sections) >= 2:
+        rows = sections[1].get("row", []) or []
 
-events = []
-for row in rows:
-    raw_date = row.get("AA_YMD", "")
-    if len(raw_date) != 8:
-        continue
-
-    events.append({
-        "date": (
-            f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
-        ),
-        "title": row.get("EVENT_NM") or "학교 일정",
-        "content": row.get("EVENT_CNTNT") or "",
-        "schoolDayType": row.get("SBTR_DD_SC_NM") or "",
-        "grade1": row.get("ONE_GRADE_EVENT_YN") or "",
-        "grade2": row.get("TW_GRADE_EVENT_YN") or "",
-        "grade3": row.get("THREE_GRADE_EVENT_YN") or "",
-    })
-
-events.sort(key=lambda item: (item["date"], item["title"]))
+rows.sort(
+    key=lambda row: (
+        row.get("AA_YMD", ""),
+        row.get("EVENT_NM", "")
+    )
+)
 
 output = {
     "school": SCHOOL_NAME,
+    "officeCode": OFFICE_CODE,
+    "schoolCode": SCHOOL_CODE,
     "updatedAt": datetime.now(
         ZoneInfo("Asia/Seoul")
     ).isoformat(timespec="seconds"),
-    "events": events,
+    "schedules": rows
 }
 
-Path("schedule.json").write_text(
+output_path = Path("schedule.json")
+output_path.write_text(
     json.dumps(output, ensure_ascii=False, indent=2),
-    encoding="utf-8",
+    encoding="utf-8"
 )
 
 print(f"학교: {SCHOOL_NAME}")
 print(f"조회 기간: {start_date} ~ {end_date}")
-print(f"수집한 학사일정: {len(events)}건")
+print(f"수집한 학사일정 건수: {len(rows)}")
+print(f"저장 위치: {output_path}")
