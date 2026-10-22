@@ -1,67 +1,49 @@
 
-name: Update School Meals and Schedule
+name: Update school meals and schedule
 
 on:
-  schedule:
-    # 매일 한국 시간 오전 6시에 자동 실행
-    - cron: "0 21 * * *"
-
   workflow_dispatch:
 
-  push:
-    branches:
-      - main
-    paths:
-      - "scripts/**"
-      - ".github/workflows/update-meals.yml"
+  schedule:
+    # UTC 20:00 = 한국 시간 다음 날 오전 05:00
+    - cron: "0 20 * * *"
 
 permissions:
   contents: write
-
-concurrency:
-  group: update-school-data
-  cancel-in-progress: false
 
 jobs:
   update-school-data:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 저장소 코드 가져오기
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
+        uses: actions/checkout@v7
 
-      # 2. Python 환경 설정
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      # 3. 급식 데이터 가져오기
       - name: Fetch NEIS meal data
         env:
           NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
         run: python scripts/fetch_meals.py
 
-      # 4. 학사일정 데이터 가져오기
       - name: Fetch NEIS school schedule
         env:
           NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
         run: python scripts/fetch_schedule.py
 
-      # 5. 변경된 JSON 파일 저장
-      - name: Commit and push updated data
+      - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add meals.json schedule.json
 
-          if git diff --cached --quiet; then
-            echo "변경된 급식 또는 학사일정 데이터가 없습니다."
-          else
+          if ! git diff --cached --quiet; then
             git commit -m "Update school meals and schedule"
-            git push origin main
+            git push
+          else
+            echo "No changes in school data."
           fi
