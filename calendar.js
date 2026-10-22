@@ -1,7 +1,21 @@
 
 /* ===== 급식 데이터 로딩 및 화면 표시 ===== */
 
-let selectedMealDate = dateKey(today);
+function getTodayDateKey() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+
+  const part = (type) => parts.find(p => p.type === type).value;
+
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+let selectedMealDate = getTodayDateKey();
 let mealData = [];
 
 const MEAL_TYPES = [
