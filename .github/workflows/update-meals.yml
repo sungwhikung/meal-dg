@@ -1,44 +1,32 @@
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v7
 
-name: Update school meal data
+  - name: Set up Python
+    uses: actions/setup-python@v7
+    with:
+      python-version: "3.12"
 
-on:
-  workflow_dispatch:
+  - name: Fetch NEIS meal data
+    env:
+      NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+    run: python scripts/fetch_meals.py
 
-  schedule:
-    # UTC 20:00 = 한국 시간 다음 날 오전 05:00
-    - cron: "0 20 * * *"
+  - name: Fetch NEIS school schedule
+    env:
+      NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+    run: python scripts/fetch_schedule.py
 
-permissions:
-  contents: write
+  - name: Commit updated data
+    run: |
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-jobs:
-  update-meals:
-    runs-on: ubuntu-latest
+      git add meals.json schedule.json
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Fetch NEIS meal data
-        env:
-          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
-        run: python scripts/fetch_meals.py
-
-      - name: Commit updated data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add meals.json
-
-          if ! git diff --cached --quiet; then
-            git commit -m "Update school meal data"
-            git push
-          else
-            echo "No changes in meal data."
-          fi
+      if ! git diff --cached --quiet; then
+        git commit -m "Update meal and school schedule data"
+        git push
+      else
+        echo "No changes in school data."
+      fi
