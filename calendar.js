@@ -1,459 +1,618 @@
+
+"use strict";
+
 import { initializeApp } from
-  "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+  "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+
 import {
   getAuth,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+  signOut
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
 import {
   getFirestore,
   collection,
-  getDocs,
   addDoc,
+  getDocs,
+  doc,
   updateDoc,
   deleteDoc,
-  doc,
+  query,
+  where,
+  orderBy,
   serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+/* ==================================================
+   1. Firebase 설정
+   Firebase Console > 프로젝트 설정 > 내 앱에서 확인
+   ================================================== */
 
 const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_WEB_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
   projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
   appId: "YOUR_FIREBASE_APP_ID"
 };
 
-// Firebase 사용자 UID를 입력한다. 비밀번호를 입력하는 곳이 아니다.
+/*
+ * Firebase Authentication에서 만든 관리자 계정의 UID.
+ * UID 자체는 비밀번호가 아니지만, Firestore 보안 규칙에도
+ * 동일한 UID를 설정해야 실제 관리자 권한이 보호됩니다.
+ */
 const ADMIN_UID = "YOUR_ADMIN_UID";
 
-const firebaseReady =
-  firebaseConfig.apiKey !== "YOUR_FIREBASE_WEB_API_KEY" &&
-  firebaseConfig.projectId !== "YOUR_PROJECT_ID";
+const $ = (id) => document.getElementById(id);
 
+const firebaseConfigured =
+  firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY" &&
+  firebaseConfig.projectId !== "YOUR_PROJECT_ID" &&
+  ADMIN_UID !== "YOUR_ADMIN_UID";
+
+let app = null;
 let auth = null;
 let db = null;
 let currentUser = null;
-let scheduleEvents = [];
-let selectedDate = koreanToday();
-let visibleMonth = new Date(
-  Number(selectedDate.slice(0, 4)),
-  Number(selectedDate.slice(5, 7)) - 1,
-  1
-);
+let isAdmin = false;
 
-if (firebaseReady) {
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+if (firebaseConfigured) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (error) {
+    console.error("Firebase 초기화 오류:", error);
+  }
 }
 
-const $ = id => document.getElementById(id);
+/* ==================================================
+   2. 화면 전환
+   ================================================== */
 
-function koreanToday() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(new Date());
-
-  const values = Object.fromEntries(
-    parts.map(part => [part.type, part.value])
-  );
-
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function dateString(year, month, day) {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function displayDate(value) {
-  const date = new Date(`${value}T12:00:00`);
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long"
-  }).format(date);
-}
-
-function isAdmin() {
-  return Boolean(
-    currentUser &&
-    ADMIN_UID !== "YOUR_ADMIN_UID" &&
-    currentUser.uid === ADMIN_UID
-  );
-}
-
-// 상단 메뉴를 이용한 화면 전환
-document.querySelectorAll("[data-view]").forEach(button => {
+document.querySelectorAll("[data-page]").forEach(button => {
   button.addEventListener("click", () => {
-    const target = button.dataset.view;
+    const pageName = button.dataset.page;
 
-    document.querySelectorAll(".page-view").forEach(view => {
-      const active = view.id === `page-${target}`;
-      view.hidden = !active;
-      view.classList.toggle("active", active);
+    document.querySelectorAll(".page-section").forEach(section => {
+      section.classList.toggle(
+        "active",
+        section.id === `page-${pageName}`
+      );
     });
 
-    document.querySelectorAll("[data-view]").forEach(item => {
-      const active = item === button;
-      item.classList.toggle("active", active);
-      item.setAttribute("aria-current", active ? "page" : "false");
+    document.querySelectorAll("[data-page]").forEach(navButton => {
+      navButton.classList.toggle("active", navButton === button);
     });
 
-    if (target === "calendar") renderCalendar();
-    if (target === "memos") {
-      $("memoDate").value = selectedDate;
-      loadPersonalMemo();
+    if (pageName === "notices") {
       loadPublicMemos();
     }
   });
 });
 
-// NEIS에서 자동 생성한 공개 JSON 읽기
-async function loadSchedule() {
+/* ==================================================
+   3. 날짜 유틸리티
+   ================================================== */
+
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
+}
+
+function shiftMonth(value, amount) {
+  const [year, month] = value.split("-").map(Number);
+  const date = new Date(year, month - 1 + amount, 1, 12);
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}-01`;
+}
+
+function formatKoreanDate(value) {
+  if (!value) return "";
+  return parseLocalDate(value).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long"
+  });
+}
+
+function escapeText(value) {
+  return String(value ?? "");
+}
+
+function setStatus(id, message) {
+  const element = $(id);
+  if (element) element.textContent = message;
+}
+
+/* ==================================================
+   4. NEIS 학사일정 데이터
+   ================================================== */
+
+let scheduleRows = [];
+let selectedCalendarDate = localDateString();
+let visibleMonth = `${selectedCalendarDate.slice(0, 7)}-01`;
+
+async function loadScheduleData() {
+  const details = $("scheduleDetails");
+  details.replaceChildren();
+
   try {
     const response = await fetch("./schedule.json", {
       cache: "no-store"
     });
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`schedule.json 요청 실패: ${response.status}`);
+    }
 
     const data = await response.json();
-    scheduleEvents = Array.isArray(data.events) ? data.events : [];
+    scheduleRows = Array.isArray(data.schedules) ? data.schedules : [];
+
     renderCalendar();
-    renderSelectedDate();
+    renderScheduleDetails();
   } catch (error) {
-    console.error("학사일정 로딩 실패:", error);
-    $("schoolEvents").textContent =
-      "학사일정을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
+    console.error(error);
+    const message = document.createElement("p");
+    message.className = "status";
+    message.textContent =
+      "학사일정을 불러오지 못했습니다. GitHub Actions 실행 기록과 schedule.json을 확인하세요.";
+    details.replaceChildren(message);
+    $("calendarGrid").replaceChildren();
   }
 }
 
-function eventsForDate(value) {
-  return scheduleEvents.filter(event => event.date === value);
-}
-
-function makeTextElement(tag, className, text) {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  element.textContent = text;
-  return element;
+function schedulesForDate(dateValue) {
+  const key = dateValue.replaceAll("-", "");
+  return scheduleRows.filter(row => String(row.AA_YMD || "") === key);
 }
 
 function renderCalendar() {
-  const year = visibleMonth.getFullYear();
-  const month = visibleMonth.getMonth();
+  const [year, month] = visibleMonth.split("-").map(Number);
+  $("calendarMonth").textContent = `${year}년 ${month}월`;
 
-  $("calendarMonth").textContent = `${year}년 ${month + 1}월`;
-
+  const firstDay = new Date(year, month - 1, 1, 12);
+  const daysInMonth = new Date(year, month, 0, 12).getDate();
+  const offset = firstDay.getDay();
   const grid = $("calendarGrid");
-  grid.replaceChildren();
+  const fragment = document.createDocumentFragment();
 
-  ["일", "월", "화", "수", "목", "금", "토"].forEach(day => {
-    grid.appendChild(makeTextElement("div", "calendar-weekday", day));
-  });
-
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-
-  for (let i = 0; i < firstWeekday; i++) {
-    grid.appendChild(makeTextElement("div", "calendar-empty", ""));
+  for (let i = 0; i < offset; i++) {
+    const blank = document.createElement("div");
+    blank.className = "calendar-cell empty";
+    blank.setAttribute("aria-hidden", "true");
+    fragment.appendChild(blank);
   }
 
-  for (let day = 1; day <= lastDay; day++) {
-    const value = dateString(year, month + 1, day);
-    const events = eventsForDate(value);
-    const button = document.createElement("button");
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateValue =
+      `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+    const button = document.createElement("button");
     button.type = "button";
     button.className = "calendar-cell";
-    button.classList.toggle("selected", value === selectedDate);
-    button.setAttribute("aria-label",
-      `${displayDate(value)}${events.length ? `, 일정 ${events.length}개` : ""}`);
+    button.classList.toggle("selected", dateValue === selectedCalendarDate);
+    button.classList.toggle("today", dateValue === localDateString());
 
-    button.appendChild(makeTextElement("span", "", String(day)));
+    const number = document.createElement("span");
+    number.className = "calendar-day-number";
+    number.textContent = String(day);
+    button.appendChild(number);
 
-    if (events.length) {
-      button.appendChild(makeTextElement("span", "event-dot", ""));
+    const events = schedulesForDate(dateValue);
+    if (events.length > 0) {
+      const marker = document.createElement("span");
+      marker.className = "calendar-event-marker";
+      marker.textContent = `일정 ${events.length}개`;
+      button.appendChild(marker);
     }
 
-    button.addEventListener("click", () => selectDate(value));
-    grid.appendChild(button);
-  }
-}
+    button.addEventListener("click", () => {
+      selectedCalendarDate = dateValue;
+      $("personalMemoDate").value = dateValue;
+      renderCalendar();
+      renderScheduleDetails();
+      loadPersonalMemo();
+    });
 
-function selectDate(value) {
-  selectedDate = value;
-  visibleMonth = new Date(
-    Number(value.slice(0, 4)),
-    Number(value.slice(5, 7)) - 1,
-    1
-  );
-
-  $("memoDate").value = value;
-  loadPersonalMemo();
-  renderCalendar();
-  renderSelectedDate();
-  loadPublicMemos();
-}
-
-function renderSelectedDate() {
-  $("calendarSelectedDate").textContent = displayDate(selectedDate);
-
-  const container = $("schoolEvents");
-  container.replaceChildren();
-
-  const events = eventsForDate(selectedDate);
-
-  if (!events.length) {
-    container.appendChild(
-      makeTextElement("p", "muted", "등록된 학교 학사일정이 없습니다.")
-    );
-    return;
+    fragment.appendChild(button);
   }
 
-  events.forEach(event => {
-    const card = document.createElement("article");
-    card.className = "event-item";
-    card.appendChild(makeTextElement("h3", "", event.title));
-
-    if (event.content) {
-      card.appendChild(makeTextElement("p", "", event.content));
-    }
-
-    container.appendChild(card);
-  });
+  grid.replaceChildren(fragment);
 }
 
-// 개인 메모는 서버에 보내지 않고 현재 브라우저에만 저장
-function personalStorageKey() {
-  return `daegeun-personal-memo:${selectedDate}`;
-}
+function renderScheduleDetails() {
+  $("selectedCalendarDate").textContent =
+    formatKoreanDate(selectedCalendarDate);
 
-function loadPersonalMemo() {
-  $("personalMemo").value =
-    localStorage.getItem(personalStorageKey()) || "";
-  $("personalMemoStatus").textContent = "";
-}
+  const container = $("scheduleDetails");
+  const events = schedulesForDate(selectedCalendarDate);
+  const fragment = document.createDocumentFragment();
 
-$("memoDate").addEventListener("change", event => {
-  if (event.target.value) selectDate(event.target.value);
-});
+  if (events.length === 0) {
+    const p = document.createElement("p");
+    p.className = "empty-message";
+    p.textContent = "이 날짜에 등록된 학사일정이 없습니다.";
+    fragment.appendChild(p);
+  } else {
+    events.forEach(event => {
+      const card = document.createElement("article");
+      card.className = "schedule-card";
 
-$("savePersonalMemo").addEventListener("click", () => {
-  try {
-    localStorage.setItem(
-      personalStorageKey(),
-      $("personalMemo").value
-    );
-    $("personalMemoStatus").textContent = "이 브라우저에 저장했습니다.";
-  } catch (error) {
-    console.error(error);
-    $("personalMemoStatus").textContent =
-      "저장하지 못했습니다. 브라우저 저장 공간을 확인해 주세요.";
+      const title = document.createElement("h3");
+      title.textContent = event.EVENT_NM || "학교 일정";
+
+      const content = document.createElement("p");
+      content.textContent = event.EVENT_CNTNT || "추가 설명이 없습니다.";
+
+      card.append(title, content);
+      fragment.appendChild(card);
+    });
   }
-});
+
+  container.replaceChildren(fragment);
+}
 
 $("calendarPrev").addEventListener("click", () => {
-  visibleMonth = new Date(
-    visibleMonth.getFullYear(),
-    visibleMonth.getMonth() - 1,
-    1
-  );
+  visibleMonth = shiftMonth(visibleMonth, -1);
   renderCalendar();
 });
 
 $("calendarNext").addEventListener("click", () => {
-  visibleMonth = new Date(
-    visibleMonth.getFullYear(),
-    visibleMonth.getMonth() + 1,
-    1
-  );
+  visibleMonth = shiftMonth(visibleMonth, 1);
   renderCalendar();
 });
 
-// 모든 학생이 읽을 수 있는 관리자 공통 메모
-async function loadPublicMemos() {
-  const containers = [$("publicMemoList"), $("sharedMemoList")];
-  containers.forEach(container => container.replaceChildren());
+$("calendarToday").addEventListener("click", () => {
+  selectedCalendarDate = localDateString();
+  visibleMonth = `${selectedCalendarDate.slice(0, 7)}-01`;
+  $("personalMemoDate").value = selectedCalendarDate;
+  renderCalendar();
+  renderScheduleDetails();
+  loadPersonalMemo();
+});
 
-  if (!db) {
-    containers.forEach(container => {
-      container.appendChild(makeTextElement(
-        "p", "muted",
-        "공통 메모 기능을 사용하려면 Firebase 설정이 필요합니다."
-      ));
-    });
+$("personalMemoDate").value = selectedCalendarDate;
+
+/* ==================================================
+   5. 개인 메모 - 브라우저 localStorage
+   ================================================== */
+
+function personalMemoKey(dateValue) {
+  return `daegun-meal-personal-memo-${dateValue}`;
+}
+
+function loadPersonalMemo() {
+  const dateValue = $("personalMemoDate").value || selectedCalendarDate;
+  let savedText = "";
+
+  try {
+    savedText = localStorage.getItem(personalMemoKey(dateValue)) || "";
+  } catch (error) {
+    console.error(error);
+    setStatus("personalMemoStatus", "브라우저 저장소를 사용할 수 없습니다.");
+    return;
+  }
+
+  $("personalMemoText").value = savedText;
+  setStatus("personalMemoStatus", savedText ? "저장된 메모를 불러왔습니다." : "");
+}
+
+$("personalMemoDate").addEventListener("change", () => {
+  if (!$("personalMemoDate").value) return;
+  selectedCalendarDate = $("personalMemoDate").value;
+  visibleMonth = `${selectedCalendarDate.slice(0, 7)}-01`;
+  renderCalendar();
+  renderScheduleDetails();
+  loadPersonalMemo();
+});
+
+$("savePersonalMemo").addEventListener("click", () => {
+  const dateValue = $("personalMemoDate").value;
+  const memo = $("personalMemoText").value;
+
+  if (!dateValue) {
+    setStatus("personalMemoStatus", "메모 날짜를 선택하세요.");
     return;
   }
 
   try {
-    const snapshot = await getDocs(collection(db, "publicMemos"));
-    const memos = snapshot.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(item => item.date === selectedDate)
-      .sort((a, b) => (a.createdAt?.seconds || 0) -
-                      (b.createdAt?.seconds || 0));
+    if (memo.trim()) {
+      localStorage.setItem(personalMemoKey(dateValue), memo);
+    } else {
+      localStorage.removeItem(personalMemoKey(dateValue));
+    }
 
-    containers.forEach(container => {
-      if (!memos.length) {
-        container.appendChild(makeTextElement(
-          "p", "muted", "이 날짜에 등록된 공통 메모가 없습니다."
-        ));
-      }
-
-      memos.forEach(memo => {
-        const card = document.createElement("article");
-        card.className = "shared-memo-item";
-        card.appendChild(makeTextElement("h3", "", memo.title || "학교 공지"));
-        card.appendChild(makeTextElement("p", "", memo.content || ""));
-
-        if (isAdmin()) {
-          const edit = makeTextElement("button", "", "수정");
-          edit.type = "button";
-          edit.addEventListener("click", () => editPublicMemo(memo));
-
-          const remove = makeTextElement("button", "", "삭제");
-          remove.type = "button";
-          remove.addEventListener("click", () => deletePublicMemo(memo));
-
-          card.append(edit, remove);
-        }
-
-        container.appendChild(card);
-      });
-    });
-  } catch (error) {
-    console.error("공통 메모 조회 실패:", error);
-    containers.forEach(container => {
-      container.appendChild(makeTextElement(
-        "p", "muted", "공통 메모를 불러오지 못했습니다."
-      ));
-    });
-  }
-}
-
-async function editPublicMemo(memo) {
-  if (!isAdmin() || !db) return;
-
-  const title = prompt("메모 제목", memo.title || "");
-  if (title === null) return;
-
-  const content = prompt("메모 내용", memo.content || "");
-  if (content === null) return;
-
-  try {
-    await updateDoc(doc(db, "publicMemos", memo.id), {
-      title: title.trim(),
-      content: content.trim(),
-      updatedAt: serverTimestamp()
-    });
-    await loadPublicMemos();
+    setStatus("personalMemoStatus", "이 브라우저에 메모를 저장했습니다.");
   } catch (error) {
     console.error(error);
-    alert("수정하지 못했습니다. 관리자 권한을 확인해 주세요.");
+    setStatus("personalMemoStatus", "저장에 실패했습니다. 브라우저 설정을 확인하세요.");
   }
-}
+});
 
-async function deletePublicMemo(memo) {
-  if (!isAdmin() || !db) return;
-  if (!confirm(`"${memo.title}" 메모를 삭제할까요?`)) return;
+$("deletePersonalMemo").addEventListener("click", () => {
+  const dateValue = $("personalMemoDate").value;
+  if (!dateValue) return;
 
   try {
-    await deleteDoc(doc(db, "publicMemos", memo.id));
-    await loadPublicMemos();
+    localStorage.removeItem(personalMemoKey(dateValue));
+    $("personalMemoText").value = "";
+    setStatus("personalMemoStatus", "메모를 삭제했습니다.");
   } catch (error) {
     console.error(error);
-    alert("삭제하지 못했습니다. 관리자 권한을 확인해 주세요.");
+    setStatus("personalMemoStatus", "메모 삭제에 실패했습니다.");
   }
+});
+
+loadPersonalMemo();
+
+/* ==================================================
+   6. Firebase 인증
+   ================================================== */
+
+function updateAuthUI() {
+  $("authLoggedOut").hidden = Boolean(currentUser);
+  $("authLoggedIn").hidden = !currentUser;
+  $("adminMemoEditor").hidden = !isAdmin;
+
+  $("loggedInEmail").textContent = currentUser?.email || "";
+  $("adminRoleStatus").textContent = isAdmin
+    ? "관리자 권한이 확인되었습니다."
+    : "로그인되어 있지만 공유 메모 관리 권한은 없습니다.";
 }
 
-// 관리자 로그인
-$("adminLoginForm").addEventListener("submit", async event => {
-  event.preventDefault();
-
+$("adminLogin").addEventListener("click", async () => {
   if (!auth) {
-    $("adminStatus").textContent = "Firebase 설정을 먼저 완료해 주세요.";
+    setStatus(
+      "authStatus",
+      "Firebase 설정이 완료되지 않았습니다. calendar.js의 설정값을 확인하세요."
+    );
+    return;
+  }
+
+  const email = $("adminEmail").value.trim();
+  const password = $("adminPassword").value;
+
+  if (!email || !password) {
+    setStatus("authStatus", "이메일과 비밀번호를 입력하세요.");
     return;
   }
 
   try {
-    await signInWithEmailAndPassword(
-      auth,
-      $("adminEmail").value.trim(),
-      $("adminPassword").value
-    );
+    await signInWithEmailAndPassword(auth, email, password);
     $("adminPassword").value = "";
+    setStatus("authStatus", "로그인 요청을 완료했습니다.");
   } catch (error) {
     console.error(error);
-    $("adminStatus").textContent =
-      "로그인에 실패했습니다. 이메일, 비밀번호, Firebase 설정을 확인해 주세요.";
+    setStatus("authStatus", "로그인에 실패했습니다. 계정과 Firebase 설정을 확인하세요.");
   }
 });
 
 $("adminLogout").addEventListener("click", async () => {
-  if (auth) await signOut(auth);
-});
-
-$("sharedMemoForm").addEventListener("submit", async event => {
-  event.preventDefault();
-
-  if (!isAdmin() || !db) {
-    $("adminStatus").textContent = "공통 메모 등록 권한이 없습니다.";
-    return;
-  }
-
-  const title = $("sharedTitle").value.trim();
-  const content = $("sharedContent").value.trim();
-
-  if (!title || !content) return;
+  if (!auth) return;
 
   try {
-    await addDoc(collection(db, "publicMemos"), {
-      date: selectedDate,
-      title,
-      content,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    $("sharedTitle").value = "";
-    $("sharedContent").value = "";
-    await loadPublicMemos();
-    $("adminStatus").textContent = "공통 메모를 등록했습니다.";
+    await signOut(auth);
+    setStatus("authStatus", "로그아웃했습니다.");
   } catch (error) {
     console.error(error);
-    $("adminStatus").textContent =
-      "등록 실패. Firestore 보안 규칙과 관리자 UID를 확인해 주세요.";
+    setStatus("authStatus", "로그아웃에 실패했습니다.");
   }
 });
 
 if (auth) {
-  onAuthStateChanged(auth, user => {
+  onAuthStateChanged(auth, async user => {
     currentUser = user;
+    isAdmin = Boolean(user && user.uid === ADMIN_UID);
 
-    const admin = isAdmin();
-    $("adminStatus").textContent = admin
-      ? "관리자 로그인 상태입니다."
-      : "관리자 로그인이 필요합니다.";
+    updateAuthUI();
 
-    $("adminLoginForm").hidden = admin;
-    $("adminLogout").hidden = !admin;
-    $("sharedMemoForm").hidden = !admin;
+    if (user && !isAdmin) {
+      setStatus(
+        "authStatus",
+        "로그인되었지만 이 계정에는 관리자 권한이 없습니다."
+      );
+    } else if (isAdmin) {
+      setStatus("authStatus", "관리자로 로그인했습니다.");
+    }
 
-    loadPublicMemos();
+    await loadPublicMemos();
   });
 } else {
-  $("adminStatus").textContent =
-    "Firebase 설정을 완료하면 관리자 기능을 사용할 수 있습니다.";
+  updateAuthUI();
+  setStatus(
+    "authStatus",
+    "공유 메모를 사용하려면 Firebase 설정을 먼저 완료하세요."
+  );
 }
 
-loadPersonalMemo();
-loadSchedule();
-renderCalendar();
-renderSelectedDate();
-loadPublicMemos();
+/* ==================================================
+   7. 공유 메모 - Firestore
+   ================================================== */
+
+function resetPublicMemoForm() {
+  $("publicMemoId").value = "";
+  $("publicMemoDate").value = selectedCalendarDate;
+  $("publicMemoTitle").value = "";
+  $("publicMemoContent").value = "";
+  $("memoEditorTitle").textContent = "공유 메모 작성";
+  setStatus("publicMemoEditorStatus", "");
+}
+
+$("cancelPublicMemo").addEventListener("click", resetPublicMemoForm);
+
+$("savePublicMemo").addEventListener("click", async () => {
+  if (!db || !currentUser || !isAdmin) {
+    setStatus("publicMemoEditorStatus", "관리자 로그인 후 이용할 수 있습니다.");
+    return;
+  }
+
+  const dateValue = $("publicMemoDate").value;
+  const title = $("publicMemoTitle").value.trim();
+  const content = $("publicMemoContent").value.trim();
+  const memoId = $("publicMemoId").value;
+
+  if (!dateValue || !title || !content) {
+    setStatus("publicMemoEditorStatus", "날짜, 제목, 내용을 모두 입력하세요.");
+    return;
+  }
+
+  if (title.length > 100 || content.length > 5000) {
+    setStatus("publicMemoEditorStatus", "제목 또는 내용이 너무 깁니다.");
+    return;
+  }
+
+  const data = {
+    date: dateValue,
+    title,
+    content,
+    updatedAt: serverTimestamp(),
+    updatedBy: currentUser.uid
+  };
+
+  try {
+    if (memoId) {
+      await updateDoc(doc(db, "publicMemos", memoId), data);
+      setStatus("publicMemoEditorStatus", "공유 메모를 수정했습니다.");
+    } else {
+      await addDoc(collection(db, "publicMemos"), {
+        ...data,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser.uid
+      });
+      setStatus("publicMemoEditorStatus", "공유 메모를 등록했습니다.");
+    }
+
+    resetPublicMemoForm();
+    await loadPublicMemos();
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      "publicMemoEditorStatus",
+      "저장에 실패했습니다. Firestore 보안 규칙과 관리자 UID를 확인하세요."
+    );
+  }
+});
+
+$("reloadPublicMemos").addEventListener("click", loadPublicMemos);
+
+async function loadPublicMemos() {
+  const container = $("publicMemoList");
+
+  if (!db) {
+    const p = document.createElement("p");
+    p.className = "status";
+    p.textContent = "Firebase 설정 후 공유 메모를 표시할 수 있습니다.";
+    container.replaceChildren(p);
+    return;
+  }
+
+  const loading = document.createElement("p");
+  loading.className = "status";
+  loading.textContent = "공유 메모를 불러오는 중...";
+  container.replaceChildren(loading);
+
+  try {
+    const memoQuery = query(
+      collection(db, "publicMemos"),
+      orderBy("date", "desc")
+    );
+    const snapshot = await getDocs(memoQuery);
+    const fragment = document.createDocumentFragment();
+
+    if (snapshot.empty) {
+      const p = document.createElement("p");
+      p.className = "empty-message";
+      p.textContent = "등록된 공유 메모가 없습니다.";
+      fragment.appendChild(p);
+    } else {
+      snapshot.forEach(item => {
+        const memo = item.data();
+        const card = document.createElement("article");
+        card.className = "public-memo-card";
+
+        const date = document.createElement("p");
+        date.className = "memo-date";
+        date.textContent = memo.date || "날짜 미지정";
+
+        const title = document.createElement("h3");
+        title.textContent = escapeText(memo.title);
+
+        const content = document.createElement("p");
+        content.className = "memo-content";
+        content.textContent = escapeText(memo.content);
+
+        card.append(date, title, content);
+
+        if (isAdmin) {
+          const actions = document.createElement("div");
+          actions.className = "button-row";
+
+          const editButton = document.createElement("button");
+          editButton.className = "secondary-button";
+          editButton.textContent = "수정";
+          editButton.addEventListener("click", () => {
+            $("publicMemoId").value = item.id;
+            $("publicMemoDate").value = memo.date || "";
+            $("publicMemoTitle").value = memo.title || "";
+            $("publicMemoContent").value = memo.content || "";
+            $("memoEditorTitle").textContent = "공유 메모 수정";
+            $("adminMemoEditor").hidden = false;
+            $("adminMemoEditor").scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+          });
+
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "danger-button";
+          deleteButton.textContent = "삭제";
+          deleteButton.addEventListener("click", async () => {
+            if (!isAdmin || !currentUser) return;
+            if (!confirm("이 공유 메모를 삭제할까요?")) return;
+
+            try {
+              await deleteDoc(doc(db, "publicMemos", item.id));
+              await loadPublicMemos();
+            } catch (error) {
+              console.error(error);
+              alert("삭제에 실패했습니다. Firestore 보안 규칙을 확인하세요.");
+            }
+          });
+
+          actions.append(editButton, deleteButton);
+          card.appendChild(actions);
+        }
+
+        fragment.appendChild(card);
+      });
+    }
+
+    container.replaceChildren(fragment);
+  } catch (error) {
+    console.error(error);
+    const p = document.createElement("p");
+    p.className = "status";
+    p.textContent =
+      "공유 메모를 불러오지 못했습니다. Firestore 데이터베이스와 보안 규칙을 확인하세요.";
+    container.replaceChildren(p);
+  }
+}
+
+/* ==================================================
+   8. 최초 실행
+   ================================================== */
+
+loadScheduleData();
