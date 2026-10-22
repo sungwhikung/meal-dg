@@ -39,7 +39,7 @@ const firebaseConfig = {
 };
 
 // Firebase Authentication에서 생성한 관리자 계정의 UID로 교체
-const ADMIN_UID = "YOUR_ADMIN_UID";
+const ADMIN_UID = "mxrtFi3CiGca2DCafbRlalT1eHB3";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -380,7 +380,7 @@ $("adminLogout").addEventListener("click", async () => {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
-  isAdmin = Boolean(user && user.uid = mxrtFi3CiGca2DCafbRlalT1eHB3);
+  isAdmin = Boolean(user && user.uid === ADMIN_UID);
 
   updateAuthUI();
 
