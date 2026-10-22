@@ -1,6 +1,7 @@
 
 /* ===== 급식 데이터 로딩 및 화면 표시 ===== */
-
+// HTML 요소를 ID로 찾는 함수
+const $ = (id) => document.getElementById(id);
 function getTodayDateKey() {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-CA", {
