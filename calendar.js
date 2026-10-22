@@ -155,7 +155,7 @@ function renderMealWeek() {
 
   date.setDate(date.getDate() + offset);
 
-  const monday = dateKey(date);
+  const monday = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const friday = mealDateAdd(monday, 4);
 
   if ($("weekLabel")) {
@@ -273,7 +273,7 @@ function setupMealNavigation() {
   });
 
   $("todayBtn")?.addEventListener("click", () => {
-    selectedMealDate = dateKey(new Date());
+    selectedMealDate = getTodayDateKey();
     renderMealDay();
   });
 
