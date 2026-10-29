@@ -141,8 +141,9 @@ function mondayOf(date) {
   return result;
 }
 function renderWeek() {
-  const list = $("weekList");
-  if (!list) return;
+  const head = $("weekHead");
+  const body = $("weekTable");
+  if (!head || !body) return;
   const monday = mondayOf(parseISO(todayISO()));
   monday.setDate(monday.getDate() + weekOffset * 7);
   const dates = Array.from({ length: WEEK_DAYS }, (_, i) => {
@@ -151,21 +152,13 @@ function renderWeek() {
     return isoDate(date);
   });
   const short = { month: "numeric", day: "numeric" };
+  const cellClass = date => [weekendClass(date), date === todayISO() ? "day-current" : ""].filter(Boolean).join(" ");
   if ($("weekLabel")) $("weekLabel").textContent = `${formatDate(dates[0], short)} – ${formatDate(dates[dates.length - 1], short)}`;
-  list.innerHTML = dates.map(date => {
-    const classes = ["week-row", weekendClass(date), date === todayISO() ? "is-today" : "", date === selectedDate ? "is-selected" : ""].filter(Boolean).join(" ");
-    const cells = MEAL_TYPES.map(type => {
-      const menu = getMeal(date, type.name)?._menu || [];
-      return `<div class="week-cell"><span class="week-meal">${type.name}</span>${menu.length ? escapeHTML(menu.join(", ")) : '<span class="week-none">—</span>'}</div>`;
-    }).join("");
-    return `<button type="button" class="${classes}" data-date="${date}"><span class="week-date"><strong>${formatDate(date, { weekday: "short" })}</strong>${formatDate(date, short)}</span>${cells}</button>`;
-  }).join("");
-  list.querySelectorAll("[data-date]").forEach(row => row.addEventListener("click", () => {
-    selectedDate = row.dataset.date;
-    renderMeals();
-    renderWeek();
-    $("page-meals")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }));
+  head.innerHTML = `<tr><th></th>${dates.map(date => `<th class="${cellClass(date)}"><strong>${formatDate(date, { weekday: "short" })}</strong>${formatDate(date, short)}</th>`).join("")}</tr>`;
+  body.innerHTML = MEAL_TYPES.map(type => `<tr><th>${type.name}</th>${dates.map(date => {
+    const menu = getMeal(date, type.name)?._menu?.join("\n") || "—";
+    return `<td class="week-menu ${date === todayISO() ? "day-current" : ""}">${escapeHTML(menu)}</td>`;
+  }).join("")}</tr>`).join("");
 }
 async function loadMeals() {
   const cards = $("mealCards");

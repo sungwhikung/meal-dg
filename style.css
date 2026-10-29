@@ -167,49 +167,30 @@ h1, h2, h3, h4 { margin: 0; letter-spacing: -0.02em; }
 .section-head h2 { font-size: 18px; }
 .week-controls { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
 
-.week-list {
+.table-wrap {
+  overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
 }
-.week-row {
-  display: grid;
-  grid-template-columns: 64px repeat(3, minmax(0, 1fr));
-  width: 100%;
-  padding: 0;
-  border: 0;
-  border-top: 1px solid var(--line-soft);
-  background: none;
-  color: var(--ink-2);
-  text-align: left;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.week-row:first-child { border-top: 0; }
-.week-row:hover { background: #fcfcfa; }
-.week-row.is-selected { background: var(--accent-soft); }
-.week-date {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 0 12px 14px;
+.week-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }
+.week-table th, .week-table td { padding: 12px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.week-table tr:last-child th, .week-table tr:last-child td { border-bottom: 0; }
+.week-table thead th {
   color: var(--muted);
   font-size: 12px;
+  font-weight: 400;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+  border-bottom-color: var(--line);
 }
-.week-date strong { color: var(--ink); font-size: 14px; font-weight: 650; }
-.week-row.sat .week-date strong { color: var(--sat); }
-.week-row.sun .week-date strong { color: var(--sun); }
-.week-row.is-today .week-date strong::after {
-  content: "오늘";
-  margin-left: 5px;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
-}
-.week-cell { padding: 12px 14px; border-left: 1px solid var(--line-soft); }
-.week-meal { display: none; }
-.week-none { color: #c4c2bc; }
+.week-table thead th:first-child, .week-table tbody th { width: 52px; }
+.week-table thead strong { display: block; color: var(--ink); font-size: 14px; font-weight: 650; }
+.week-table thead th.sat strong { color: var(--sat); }
+.week-table thead th.sun strong { color: var(--sun); }
+.week-table tbody th { color: var(--ink); font-size: 13px; font-weight: 650; text-align: left; }
+.week-menu { color: var(--ink-2); font-size: 12.5px; line-height: 1.75; text-align: center; white-space: pre-line; }
+.week-table .day-current { background: var(--accent-soft); }
 
 .source-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 
@@ -337,11 +318,6 @@ textarea { resize: vertical; min-height: 80px; }
   .day-title h1 { font-size: 20px; }
   .meal-grid { grid-template-columns: 1fr; gap: 10px; }
   .meal-card { padding: 14px 16px 16px; }
-
-  .week-row { grid-template-columns: 1fr; padding: 12px 14px; }
-  .week-date { flex-direction: row; align-items: baseline; gap: 6px; padding: 0 0 4px; }
-  .week-cell { display: flex; gap: 10px; padding: 2px 0; border-left: 0; }
-  .week-meal { display: block; flex-shrink: 0; width: 28px; color: var(--muted); font-size: 12px; }
 
   .calendar-panel { padding: 12px 8px; }
   .calendar-toolbar { padding: 0 6px; }
