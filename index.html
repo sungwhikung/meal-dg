@@ -3,66 +3,116 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f8fc">
-  <meta name="description" content="논산대건고등학교 급식과 학사일정을 한눈에 확인하세요.">
-  <title>대건밀 | 논산대건고등학교</title>
+  <meta name="theme-color" content="#fbfaf7">
+  <meta name="description" content="논산대건고등학교 급식과 학사일정">
+  <title>대건밀 · 논산대건고등학교</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./calendar.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#meals" aria-label="대건밀 홈"><span class="brand-mark">D</span><span><strong>대건밀</strong><small>NONSAN DAEGEON HIGH SCHOOL</small></span></a>
-    <div class="school-pill"><span class="live-dot"></span> 논산대건고등학교</div>
+    <div class="topbar-inner">
+      <a class="brand" href="#">대건밀</a>
+      <span class="school-name">논산대건고등학교</span>
+    </div>
+    <nav class="tabs" aria-label="주요 메뉴">
+      <button class="nav-button active" data-page="meals">급식</button>
+      <button class="nav-button" data-page="calendar">학사일정</button>
+      <button class="nav-button" data-page="notices">공지</button>
+    </nav>
   </header>
 
   <main class="container">
-    <section class="welcome-row">
-      <div><p class="eyebrow">YOUR SCHOOL, AT A GLANCE</p><h1>학교생활을 <span>한눈에.</span></h1><p class="subheading">급식부터 학사일정까지, 오늘 필요한 정보를 모았어요.</p></div>
-      <div class="today-chip"><span class="today-icon">✦</span><span id="todayPretty">오늘도 좋은 하루!</span></div>
-    </section>
-
-    <nav class="main-nav" aria-label="주요 메뉴">
-      <button class="nav-button active" data-page="meals"><span>🍱</span> 급식</button>
-      <button class="nav-button" data-page="calendar"><span>🗓️</span> 학사일정</button>
-      <button class="nav-button" data-page="notices"><span>📌</span> 공지사항</button>
-    </nav>
-
     <section id="page-meals" class="page-section active">
-      <div class="section-heading"><div><p class="eyebrow">DAILY MEAL</p><h2>오늘의 급식</h2><p class="section-description">메뉴를 확인하고 든든하게 하루를 시작해요.</p></div><button class="button button-soft" id="todayBtn">오늘로</button></div>
-      <div class="date-navigator"><button class="icon-button" id="prevDay" aria-label="이전 날짜">‹</button><div class="date-center"><span class="date-label" id="dateLabel">날짜 불러오는 중</span><strong id="selectedDate">—</strong></div><button class="icon-button" id="nextDay" aria-label="다음 날짜">›</button></div>
-      <div id="mealCards" class="meal-grid"><div class="loading-card">급식 정보를 불러오는 중이에요…</div></div>
-      <div class="section-heading week-heading"><div><p class="eyebrow">THIS WEEK</p><h2>주간 급식표</h2></div><div class="week-controls"><button class="icon-button small" id="prevWeek" aria-label="이전 주">‹</button><span id="weekLabel">이번 주</span><button class="icon-button small" id="nextWeek" aria-label="다음 주">›</button></div></div>
-      <div class="table-wrap"><table class="week-table"><thead id="weekHead"></thead><tbody id="weekTable"></tbody></table></div>
-      <p class="source-note">급식 정보는 학교 공공데이터를 바탕으로 제공되며, 실제 메뉴는 학교 공지를 확인해 주세요.</p>
+      <div class="day-bar">
+        <button class="icon-button" id="prevDay" aria-label="이전 날">‹</button>
+        <div class="day-title">
+          <h1 id="selectedDate">—</h1>
+          <span class="date-label" id="dateLabel"></span>
+        </div>
+        <button class="icon-button" id="nextDay" aria-label="다음 날">›</button>
+        <button class="text-button today-button" id="todayBtn">오늘</button>
+      </div>
+      <div id="mealCards" class="meal-grid"><p class="placeholder">불러오는 중…</p></div>
+
+      <div class="section-head">
+        <h2>주간 식단</h2>
+        <div class="week-controls">
+          <button class="icon-button small" id="prevWeek" aria-label="이전 주">‹</button>
+          <span id="weekLabel"></span>
+          <button class="icon-button small" id="nextWeek" aria-label="다음 주">›</button>
+        </div>
+      </div>
+      <div id="weekList" class="week-list"></div>
+      <p class="source-note">나이스 교육정보 개방 포털 자료입니다. 실제 메뉴는 학교 사정에 따라 바뀔 수 있습니다.</p>
     </section>
 
     <section id="page-calendar" class="page-section">
-      <div class="section-heading"><div><p class="eyebrow">SCHOOL CALENDAR</p><h2>학사일정</h2><p class="section-description">시험, 행사, 방학 등 학교 일정을 확인하세요.</p></div><button class="button button-soft" id="calendarToday">이번 달</button></div>
       <div class="calendar-panel">
-        <div class="calendar-toolbar"><button class="icon-button" id="calendarPrev" aria-label="이전 달">‹</button><h3 id="calendarMonth">—</h3><button class="icon-button" id="calendarNext" aria-label="다음 달">›</button></div>
-        <div class="calendar-grid calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div class="calendar-toolbar">
+          <button class="icon-button" id="calendarPrev" aria-label="이전 달">‹</button>
+          <h1 id="calendarMonth">—</h1>
+          <button class="icon-button" id="calendarNext" aria-label="다음 달">›</button>
+          <button class="text-button today-button" id="calendarToday">이번 달</button>
+        </div>
+        <div class="calendar-grid calendar-weekdays"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
         <div id="calendarGrid" class="calendar-grid"></div>
-        <div class="calendar-legend"><span><i class="legend-dot school"></i> 학사일정</span><span><i class="legend-dot notice"></i> 공지사항</span><span><i class="legend-dot personal"></i> 내 메모</span></div>
+        <div class="calendar-legend"><span><i class="legend-dot school"></i>학사일정</span><span><i class="legend-dot notice"></i>공지</span><span><i class="legend-dot personal"></i>내 메모</span></div>
       </div>
       <div class="calendar-lower">
-        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">SCHEDULE</p><h3 id="selectedCalendarDate">날짜를 선택하세요</h3></div></div><div id="scheduleDetails" class="schedule-list"><p class="empty-state">날짜를 선택하면 일정이 표시됩니다.</p></div></article>
-        <article class="panel"><div class="panel-heading"><div><p class="eyebrow">PRIVATE NOTE</p><h3>나만의 메모</h3></div><span class="private-label">이 기기에 저장</span></div><label class="field-label" for="personalMemoDate">날짜</label><input id="personalMemoDate" type="date"><label class="field-label" for="personalMemoText">메모 내용</label><textarea id="personalMemoText" rows="4" placeholder="시험 준비, 준비물, 할 일 등을 적어두세요."></textarea><div class="button-row"><button class="button button-primary" id="savePersonalMemo">메모 저장</button><button class="button button-quiet" id="deletePersonalMemo">삭제</button></div><p id="personalMemoStatus" class="status-text" aria-live="polite"></p></article>
+        <article class="panel">
+          <h3 id="selectedCalendarDate">날짜를 선택하세요</h3>
+          <div id="scheduleDetails" class="schedule-list"><p class="empty-state">날짜를 선택하면 일정이 표시됩니다.</p></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><h3>내 메모</h3><span class="private-label">이 기기에만 저장</span></div>
+          <label class="field-label" for="personalMemoDate">날짜</label>
+          <input id="personalMemoDate" type="date">
+          <label class="field-label" for="personalMemoText">내용</label>
+          <textarea id="personalMemoText" rows="4" placeholder="준비물, 할 일 등"></textarea>
+          <div class="button-row"><button class="button button-primary" id="savePersonalMemo">저장</button><button class="button button-quiet" id="deletePersonalMemo">삭제</button></div>
+          <p id="personalMemoStatus" class="status-text" aria-live="polite"></p>
+        </article>
       </div>
     </section>
 
     <section id="page-notices" class="page-section">
-      <div class="section-heading"><div><p class="eyebrow">SCHOOL NOTICE</p><h2>공지사항</h2><p class="section-description">학교 관련 안내를 모아 확인할 수 있어요.</p></div><button class="button button-soft" id="reloadPublicMemos">새로고침</button></div>
-      <div id="publicMemoList" class="notice-list"><div class="loading-card">공지사항을 불러오는 중이에요…</div></div>
-      <div class="admin-panel panel">
-        <div class="panel-heading"><div><p class="eyebrow">ADMIN AREA</p><h3>관리자 로그인</h3><p class="muted">관리자 계정으로 로그인하면 공지사항을 작성할 수 있어요.</p></div><span class="admin-icon">🔐</span></div>
-        <div id="authLoggedOut"><div class="form-grid"><div><label class="field-label" for="adminEmail">이메일</label><input id="adminEmail" type="email" autocomplete="username" placeholder="관리자 이메일"></div><div><label class="field-label" for="adminPassword">비밀번호</label><input id="adminPassword" type="password" autocomplete="current-password" placeholder="비밀번호"></div></div><button class="button button-primary full-width" id="adminLogin">로그인</button></div>
-        <div id="authLoggedIn" hidden><div class="logged-in-row"><div><strong id="loggedInEmail">—</strong><p id="adminRoleStatus" class="muted">로그인 상태</p></div><button class="button button-quiet" id="adminLogout">로그아웃</button></div></div>
-        <p id="authStatus" class="status-text" aria-live="polite"></p>
-        <div id="adminMemoEditor" class="editor" hidden><div class="editor-title-row"><h4 id="memoEditorTitle">공지 작성</h4><button id="cancelPublicMemo" class="text-button" type="button">작성 취소</button></div><input id="publicMemoId" type="hidden"><label class="field-label" for="publicMemoDate">공지 날짜</label><input id="publicMemoDate" type="date"><label class="field-label" for="publicMemoTitle">제목</label><input id="publicMemoTitle" maxlength="100" placeholder="공지 제목"><label class="field-label" for="publicMemoContent">내용</label><textarea id="publicMemoContent" rows="5" maxlength="5000" placeholder="공지 내용을 입력하세요."></textarea><button class="button button-primary full-width" id="savePublicMemo">공지 저장</button><p id="publicMemoEditorStatus" class="status-text" aria-live="polite"></p></div>
+      <div class="section-head first">
+        <h1>공지</h1>
+        <button class="text-button" id="reloadPublicMemos">새로고침</button>
       </div>
+      <div id="publicMemoList" class="notice-list"><p class="placeholder">불러오는 중…</p></div>
+
+      <details class="admin-panel">
+        <summary>관리자</summary>
+        <div id="authLoggedOut">
+          <div class="form-grid">
+            <div><label class="field-label" for="adminEmail">이메일</label><input id="adminEmail" type="email" autocomplete="username"></div>
+            <div><label class="field-label" for="adminPassword">비밀번호</label><input id="adminPassword" type="password" autocomplete="current-password"></div>
+          </div>
+          <button class="button button-primary full-width" id="adminLogin">로그인</button>
+        </div>
+        <div id="authLoggedIn" hidden>
+          <div class="logged-in-row"><div><strong id="loggedInEmail">—</strong><p id="adminRoleStatus" class="muted">로그인 상태</p></div><button class="button button-quiet" id="adminLogout">로그아웃</button></div>
+        </div>
+        <p id="authStatus" class="status-text" aria-live="polite"></p>
+        <div id="adminMemoEditor" class="editor" hidden>
+          <div class="editor-title-row"><h4 id="memoEditorTitle">공지 작성</h4><button id="cancelPublicMemo" class="text-button" type="button">취소</button></div>
+          <input id="publicMemoId" type="hidden">
+          <label class="field-label" for="publicMemoDate">날짜</label><input id="publicMemoDate" type="date">
+          <label class="field-label" for="publicMemoTitle">제목</label><input id="publicMemoTitle" maxlength="100">
+          <label class="field-label" for="publicMemoContent">내용</label><textarea id="publicMemoContent" rows="5" maxlength="5000"></textarea>
+          <button class="button button-primary full-width" id="savePublicMemo">저장</button>
+          <p id="publicMemoEditorStatus" class="status-text" aria-live="polite"></p>
+        </div>
+      </details>
     </section>
 
-    <footer class="footer"><div class="footer-brand"><span class="brand-mark small-mark">D</span><strong>대건밀</strong></div><p>논산대건고등학교 학교생활 도우미</p><p class="footer-meta">데이터 업데이트 <span id="updatedAt">확인 중</span></p><p class="copyright">개인 프로젝트 · 학교 공식 서비스가 아닙니다.</p></footer>
+    <footer class="footer">
+      <p>데이터 갱신 <span id="updatedAt">확인 중</span></p>
+      <p>개인 프로젝트이며 학교 공식 서비스가 아닙니다.</p>
+    </footer>
   </main>
 </body>
 </html>

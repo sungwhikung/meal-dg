@@ -4,10 +4,11 @@
 const $ = (id) => document.getElementById(id);
 const KST = "Asia/Seoul";
 const MEAL_TYPES = [
-  { name: "아침", code: "1", emoji: "🌤️", time: "BREAKFAST" },
-  { name: "점심", code: "2", emoji: "🍱", time: "LUNCH" },
-  { name: "저녁", code: "3", emoji: "🌙", time: "DINNER" }
+  { name: "아침", code: "1" },
+  { name: "점심", code: "2" },
+  { name: "저녁", code: "3" }
 ];
+const WEEK_DAYS = 7; // 기숙사 운영으로 주말에도 급식이 있어 월~일 모두 표시
 
 const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, ch => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -102,19 +103,34 @@ function parseMenu(raw) {
 function getMeal(date, type) {
   return meals.find(item => item._date === date && item._type === type);
 }
+function weekendClass(date) {
+  const day = parseISO(date).getDay();
+  return day === 0 ? "sun" : day === 6 ? "sat" : "";
+}
+function kcal(item) {
+  const value = parseFloat(String(item?.CAL_INFO ?? ""));
+  return Number.isFinite(value) ? `${Math.round(value)} kcal` : "";
+}
 function renderMeals() {
   const cards = $("mealCards");
   if (!cards) return;
-  if ($("selectedDate")) $("selectedDate").textContent = formatDate(selectedDate);
-  if ($("dateLabel")) $("dateLabel").textContent = selectedDate === todayISO() ? "TODAY · 오늘" : "선택한 날짜";
+  if ($("selectedDate")) {
+    $("selectedDate").textContent = formatDate(selectedDate, { month: "long", day: "numeric", weekday: "short" });
+    $("selectedDate").className = weekendClass(selectedDate);
+  }
+  if ($("dateLabel")) $("dateLabel").textContent = selectedDate === todayISO() ? "오늘" : "";
 
-  cards.innerHTML = MEAL_TYPES.map(type => {
-    const item = getMeal(selectedDate, type.name);
+  const items = MEAL_TYPES.map(type => ({ type, item: getMeal(selectedDate, type.name) }));
+  if (!items.some(entry => entry.item)) {
+    cards.innerHTML = '<p class="placeholder">이 날은 등록된 급식이 없습니다.</p>';
+    return;
+  }
+  cards.innerHTML = items.map(({ type, item }) => {
     const menu = item?._menu || [];
     const menuHTML = menu.length
       ? `<ul class="meal-menu">${menu.map(name => `<li>${escapeHTML(name)}</li>`).join("")}</ul>`
-      : `<p class="meal-empty">등록된 메뉴가 없습니다.</p>`;
-    return `<article class="meal-card"><div class="meal-card-top"><div class="meal-name"><span class="meal-emoji">${type.emoji}</span>${type.name}</div><span class="meal-time">${type.time}</span></div>${menuHTML}${item?.CAL_INFO ? `<p class="meal-calories">${escapeHTML(item.CAL_INFO)}</p>` : ""}</article>`;
+      : `<p class="meal-empty">없음</p>`;
+    return `<article class="meal-card"><div class="meal-card-top"><h2 class="meal-name">${type.name}</h2><span class="meal-calories">${kcal(item)}</span></div>${menuHTML}</article>`;
   }).join("");
 }
 function mondayOf(date) {
@@ -125,27 +141,35 @@ function mondayOf(date) {
   return result;
 }
 function renderWeek() {
-  const head = $("weekHead");
-  const body = $("weekTable");
-  if (!head || !body) return;
+  const list = $("weekList");
+  if (!list) return;
   const monday = mondayOf(parseISO(todayISO()));
   monday.setDate(monday.getDate() + weekOffset * 7);
-  const dates = Array.from({ length: 5 }, (_, i) => {
+  const dates = Array.from({ length: WEEK_DAYS }, (_, i) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
     return isoDate(date);
   });
-  if ($("weekLabel")) $("weekLabel").textContent = `${formatDate(dates[0], { month: "numeric", day: "numeric" })} – ${formatDate(dates[4], { month: "numeric", day: "numeric" })}`;
-  head.innerHTML = `<tr><th>구분</th>${dates.map(date => `<th class="${date === todayISO() ? "day-current" : ""}">${formatDate(date, { weekday: "short" })}<br>${formatDate(date, { month: "numeric", day: "numeric" })}</th>`).join("")}</tr>`;
-  body.innerHTML = MEAL_TYPES.map(type => `<tr><th>${type.name}</th>${dates.map(date => {
-    const row = getMeal(date, type.name);
-    const menu = row?._menu?.join("\n") || "—";
-    return `<td class="week-menu ${date === todayISO() ? "day-current" : ""}">${escapeHTML(menu)}</td>`;
-  }).join("")}</tr>`).join("");
+  const short = { month: "numeric", day: "numeric" };
+  if ($("weekLabel")) $("weekLabel").textContent = `${formatDate(dates[0], short)} – ${formatDate(dates[dates.length - 1], short)}`;
+  list.innerHTML = dates.map(date => {
+    const classes = ["week-row", weekendClass(date), date === todayISO() ? "is-today" : "", date === selectedDate ? "is-selected" : ""].filter(Boolean).join(" ");
+    const cells = MEAL_TYPES.map(type => {
+      const menu = getMeal(date, type.name)?._menu || [];
+      return `<div class="week-cell"><span class="week-meal">${type.name}</span>${menu.length ? escapeHTML(menu.join(", ")) : '<span class="week-none">—</span>'}</div>`;
+    }).join("");
+    return `<button type="button" class="${classes}" data-date="${date}"><span class="week-date"><strong>${formatDate(date, { weekday: "short" })}</strong>${formatDate(date, short)}</span>${cells}</button>`;
+  }).join("");
+  list.querySelectorAll("[data-date]").forEach(row => row.addEventListener("click", () => {
+    selectedDate = row.dataset.date;
+    renderMeals();
+    renderWeek();
+    $("page-meals")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
 }
 async function loadMeals() {
   const cards = $("mealCards");
-  if (cards) cards.innerHTML = '<div class="loading-card">급식 정보를 불러오는 중이에요…</div>';
+  if (cards) cards.innerHTML = '<p class="placeholder">불러오는 중…</p>';
   try {
     const response = await fetch(`./meals.json?v=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`meals.json HTTP ${response.status}`);
@@ -171,16 +195,24 @@ async function loadMeals() {
     console.error("[대건밀] 급식 로딩 실패:", error);
     meals = [];
     if (cards) {
-      cards.innerHTML = `<div class="loading-card">급식을 불러오지 못했습니다.<br><small>${escapeHTML(error.message || "데이터 파일을 확인해 주세요.")}</small></div>`;
+      cards.innerHTML = `<p class="placeholder">급식을 불러오지 못했습니다.<br><small>${escapeHTML(error.message || "데이터 파일을 확인해 주세요.")}</small></p>`;
     }
     if ($("updatedAt")) $("updatedAt").textContent = "데이터 연결 오류";
     renderWeek();
   }
 }
 function setupMealButtons() {
-  $("prevDay")?.addEventListener("click", () => { selectedDate = shiftDate(selectedDate, -1); renderMeals(); });
-  $("nextDay")?.addEventListener("click", () => { selectedDate = shiftDate(selectedDate, 1); renderMeals(); });
-  $("todayBtn")?.addEventListener("click", () => { selectedDate = todayISO(); renderMeals(); });
+  // 날짜를 넘기면 주간 식단도 그 날짜가 속한 주로 따라간다
+  const goTo = date => {
+    selectedDate = date;
+    const diff = Math.round((mondayOf(parseISO(date)) - mondayOf(parseISO(todayISO()))) / 864e5);
+    weekOffset = Math.round(diff / 7);
+    renderMeals();
+    renderWeek();
+  };
+  $("prevDay")?.addEventListener("click", () => goTo(shiftDate(selectedDate, -1)));
+  $("nextDay")?.addEventListener("click", () => goTo(shiftDate(selectedDate, 1)));
+  $("todayBtn")?.addEventListener("click", () => goTo(todayISO()));
   $("prevWeek")?.addEventListener("click", () => { weekOffset--; renderWeek(); });
   $("nextWeek")?.addEventListener("click", () => { weekOffset++; renderWeek(); });
 }
@@ -229,11 +261,11 @@ function renderCalendar() {
     const dayNotices = publicMemos.filter(item => String(item.date || "").slice(0, 10) === key);
     const labels = [
       ...daySchedules.slice(0, 2).map(item => `<span class="calendar-event school-event" title="${escapeHTML(item.title)}">${escapeHTML(shortText(item.title, 16))}</span>`),
-      ...dayNotices.slice(0, 2).map(item => `<span class="calendar-event notice-event" title="${escapeHTML(item.title || "공지")} ">📌 ${escapeHTML(shortText(item.title || "공지", 13))}</span>`)
+      ...dayNotices.slice(0, 2).map(item => `<span class="calendar-event notice-event" title="${escapeHTML(item.title || "공지")}">${escapeHTML(shortText(item.title || "공지", 13))}</span>`)
     ];
     const total = daySchedules.length + dayNotices.length;
     if (total > 4) labels.push(`<span class="calendar-more">+${total - 4}개 더</span>`);
-    cells.push(`<button type="button" class="calendar-day ${inMonth ? "" : "outside"} ${key === todayISO() ? "today" : ""} ${key === selectedCalendarDate ? "selected" : ""}" data-date="${key}"><span class="day-number">${date.getDate()}</span><span class="calendar-events">${labels.join("")}</span>${memos[key] ? '<span class="personal-indicator">● 내 메모</span>' : ""}</button>`);
+    cells.push(`<button type="button" class="calendar-day ${inMonth ? "" : "outside"} ${key === todayISO() ? "today" : ""} ${key === selectedCalendarDate ? "selected" : ""} ${weekendClass(key)}" data-date="${key}"><span class="day-number">${date.getDate()}</span><span class="calendar-events">${labels.join("")}</span>${memos[key] ? '<span class="personal-indicator">메모</span>' : ""}</button>`);
   }
   grid.innerHTML = cells.join("");
   grid.querySelectorAll("button[data-date]").forEach(button => button.addEventListener("click", () => {
@@ -340,12 +372,12 @@ async function initFirebase() {
   } catch (error) {
     console.error("[대건밀] Firebase 초기화 오류:", error);
     authStatus("공지 기능에 연결하지 못했습니다. 급식과 학사일정은 별도로 사용할 수 있습니다.");
-    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<div class="loading-card">공지 기능을 연결하지 못했습니다.</div>';
+    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<p class="placeholder">공지 기능을 연결하지 못했습니다.</p>';
   }
 }
 async function loadPublicMemos() {
   if (!firestore) {
-    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<div class="loading-card">공지 기능을 연결하는 중이에요…</div>';
+    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<p class="placeholder">불러오는 중…</p>';
     return;
   }
   try {
@@ -355,13 +387,13 @@ async function loadPublicMemos() {
     renderPublicMemos(); renderCalendar();
   } catch (error) {
     console.error("[대건밀] 공지 로딩 오류:", error);
-    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<div class="loading-card">공지를 불러오지 못했습니다. Firestore 설정과 보안 규칙을 확인해 주세요.</div>';
+    if ($("publicMemoList")) $("publicMemoList").innerHTML = '<p class="placeholder">공지를 불러오지 못했습니다.</p>';
   }
 }
 function renderPublicMemos() {
   const list = $("publicMemoList");
   if (!list) return;
-  if (!publicMemos.length) { list.innerHTML = '<div class="loading-card">아직 등록된 공지사항이 없습니다.</div>'; return; }
+  if (!publicMemos.length) { list.innerHTML = '<p class="placeholder">등록된 공지가 없습니다.</p>'; return; }
   list.innerHTML = publicMemos.map(item => `<article class="notice-card"><div class="notice-card-head"><h3>${escapeHTML(item.title || "제목 없음")}</h3><time class="notice-date">${escapeHTML(item.date || "")}</time></div><p class="notice-content">${escapeHTML(item.content || "")}</p>${isAdmin() ? `<div class="notice-actions"><button class="text-button" data-edit="${escapeHTML(item.id)}">수정</button><button class="text-button" data-delete="${escapeHTML(item.id)}">삭제</button></div>` : ""}</article>`).join("");
   list.querySelectorAll("[data-edit]").forEach(button => button.addEventListener("click", () => editPublicMemo(button.dataset.edit)));
   list.querySelectorAll("[data-delete]").forEach(button => button.addEventListener("click", () => removePublicMemo(button.dataset.delete)));
@@ -416,7 +448,6 @@ function setupNoticeButtons(authModule, dbModule) {
 
 /* 시작: 한 기능이 실패해도 다른 기능은 계속 작동 */
 function startApp() {
-  if ($("todayPretty")) $("todayPretty").textContent = formatDate(todayISO(), { month: "long", day: "numeric", weekday: "long" });
   setupNavigation();
   setupMealButtons();
   setupCalendarButtons();
