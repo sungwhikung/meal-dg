@@ -34,12 +34,20 @@ jobs:
           NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
         run: python scripts/fetch_schedule.py
 
+      # 캘린더 쪽 문제로 급식 갱신까지 막히지 않게 한다
+      - name: Fetch study supervisors
+        continue-on-error: true
+        env:
+          SCHEDULE_API_KEY: ${{ secrets.SCHEDULE_API_KEY }}
+        run: python scripts/fetch_supervisors.py
+
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add meals.json schedule.json
+          if [ -f supervisors.json ]; then git add supervisors.json; fi
 
           if ! git diff --cached --quiet; then
             git commit -m "Update school meals and schedule"

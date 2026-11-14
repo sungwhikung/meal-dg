@@ -112,7 +112,30 @@ function kcal(item) {
   const value = parseFloat(String(item?.CAL_INFO ?? ""));
   return Number.isFinite(value) ? `${Math.round(value)} kcal` : "";
 }
+let supervisors = {};
+let supervisorGrade = 2;
+function renderSupervisor() {
+  const line = $("supervisorLine");
+  if (!line) return;
+  const name = supervisors[selectedDate];
+  line.hidden = !name;
+  line.innerHTML = name ? `<span>${supervisorGrade}학년 자습 감독</span>${escapeHTML(name)}` : "";
+}
+async function loadSupervisors() {
+  try {
+    const response = await fetch("./supervisors.json", { cache: "no-cache" });
+    if (!response.ok) throw new Error(`supervisors.json HTTP ${response.status}`);
+    const json = await response.json();
+    supervisors = json.supervisors || {};
+    supervisorGrade = json.grade || supervisorGrade;
+  } catch (error) {
+    console.warn("[대건밀] supervisors.json을 불러오지 못했습니다.", error);
+    supervisors = {};
+  }
+  renderSupervisor();
+}
 function renderMeals() {
+  renderSupervisor();
   const cards = $("mealCards");
   if (!cards) return;
   if ($("selectedDate")) {
@@ -535,6 +558,7 @@ function startApp() {
   loadMeals();
   loadSchedules();
   loadTimetable();
+  loadSupervisors();
   initFirebase();
 }
 
