@@ -119,7 +119,7 @@ function renderSupervisor() {
   if (!line) return;
   const name = supervisors[selectedDate];
   line.hidden = !name;
-  line.innerHTML = name ? `<span>${supervisorGrade}학년 자습 감독</span>${escapeHTML(name)}` : "";
+  line.innerHTML = name ? `<span>${supervisorGrade}학년 자습 감독</span>${escapeHTML(name.split(",").map(part => part.trim()).join(", "))}` : "";
 }
 async function loadSupervisors() {
   try {
