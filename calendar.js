@@ -71,6 +71,7 @@ function setupNavigation() {
       const target = button.dataset.page;
       document.querySelectorAll(".nav-button").forEach(item => item.classList.toggle("active", item === button));
       document.querySelectorAll(".page-section").forEach(section => section.classList.toggle("active", section.id === `page-${target}`));
+      if (target === "timetable") renderTimetable();
       if (target === "calendar") renderCalendar();
       if (target === "notices") loadPublicMemos();
     });
@@ -208,6 +209,64 @@ function setupMealButtons() {
   $("todayBtn")?.addEventListener("click", () => goTo(todayISO()));
   $("prevWeek")?.addEventListener("click", () => { weekOffset--; renderWeek(); });
   $("nextWeek")?.addEventListener("click", () => { weekOffset++; renderWeek(); });
+}
+
+/* 시간표: 공통 과목은 고정, 선택 그룹 시간은 기기에 저장한 내 과목으로 채운다 */
+const TIMETABLE_DAYS = [["A", "월"], ["B", "화"], ["C", "수"], ["D", "목"], ["E", "금"]];
+const ELECTIVE_KEY = "daegeonElectives";
+let timetable = null;
+function getElectives() {
+  try { return JSON.parse(localStorage.getItem(ELECTIVE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function groupLabel(group) {
+  return /^[A-Z]$/.test(group) ? `선택 ${group}` : group;
+}
+function optionLabel(name) {
+  return name.replace(/^(정보과학)(\d)$/, "$1 $2분반");
+}
+function renderTimetable() {
+  const head = $("timetableHead");
+  const body = $("timetableBody");
+  if (!head || !body) return;
+  if (!timetable) {
+    body.innerHTML = '<tr><td class="time-empty">시간표를 불러오지 못했습니다.</td></tr>';
+    return;
+  }
+  if ($("timetableTitle")) $("timetableTitle").textContent = `${timetable.grade}학년 ${timetable.class}반 시간표`;
+  const picks = getElectives();
+  const todayIndex = parseISO(todayISO()).getDay() - 1;
+  const current = index => index === todayIndex ? "day-current" : "";
+  const periods = Math.max(...Object.keys(timetable.slots).map(symbol => Number(symbol.slice(1))));
+  head.innerHTML = `<tr><th></th>${TIMETABLE_DAYS.map(([, name], index) => `<th class="${current(index)}">${name}</th>`).join("")}</tr>`;
+  body.innerHTML = Array.from({ length: periods }, (_, i) => i + 1).map(period => `<tr><th>${period}</th>${TIMETABLE_DAYS.map(([day], index) => {
+    const slot = timetable.slots[day + period];
+    if (!slot) return `<td class="${current(index)}"></td>`;
+    const picked = slot.group ? slot.options[picks[slot.group]] : slot;
+    if (!picked) return `<td class="time-open ${current(index)}">${escapeHTML(groupLabel(slot.group))}</td>`;
+    return `<td class="${current(index)}"><strong>${escapeHTML(picked.subject)}</strong>${picked.teacher ? `<span>${escapeHTML(picked.teacher)}</span>` : ""}${slot.group ? `<em>${escapeHTML(groupLabel(slot.group))}</em>` : ""}</td>`;
+  }).join("")}</tr>`).join("");
+
+  const form = $("electiveForm");
+  if (!form) return;
+  form.innerHTML = Object.keys(timetable.groups).sort().map(group => `<label class="field-label">${escapeHTML(groupLabel(group))}<select data-group="${escapeHTML(group)}"><option value="">선택 안 함</option>${timetable.groups[group].map(name => `<option value="${escapeHTML(name)}" ${picks[group] === name ? "selected" : ""}>${escapeHTML(optionLabel(name))}</option>`).join("")}</select></label>`).join("");
+  form.querySelectorAll("select").forEach(select => select.addEventListener("change", () => {
+    const next = getElectives();
+    if (select.value) next[select.dataset.group] = select.value; else delete next[select.dataset.group];
+    localStorage.setItem(ELECTIVE_KEY, JSON.stringify(next));
+    renderTimetable();
+  }));
+}
+async function loadTimetable() {
+  try {
+    const response = await fetch("./timetable.json", { cache: "no-cache" });
+    if (!response.ok) throw new Error(`timetable.json HTTP ${response.status}`);
+    timetable = await response.json();
+  } catch (error) {
+    console.warn("[대건밀] timetable.json을 불러오지 못했습니다.", error);
+    timetable = null;
+  }
+  renderTimetable();
 }
 
 /* 학사일정 */
@@ -449,6 +508,7 @@ function startApp() {
   renderCalendar();
   loadMeals();
   loadSchedules();
+  loadTimetable();
   initFirebase();
 }
 
