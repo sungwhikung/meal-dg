@@ -214,6 +214,7 @@ function setupMealButtons() {
 /* 시간표: 공통 과목은 고정, 선택 그룹 시간은 기기에 저장한 내 과목으로 채운다 */
 const TIMETABLE_DAYS = [["A", "월"], ["B", "화"], ["C", "수"], ["D", "목"], ["E", "금"]];
 const ELECTIVE_KEY = "daegeonElectives";
+const STUDENT_KEY = "daegeonStudentNumber";
 let timetable = null;
 function getElectives() {
   try { return JSON.parse(localStorage.getItem(ELECTIVE_KEY) || "{}"); }
@@ -234,6 +235,7 @@ function renderTimetable() {
     return;
   }
   if ($("timetableTitle")) $("timetableTitle").textContent = `${timetable.grade}학년 ${timetable.class}반 시간표`;
+  if ($("studentNumber") && document.activeElement !== $("studentNumber")) $("studentNumber").value = localStorage.getItem(STUDENT_KEY) || "";
   const picks = getElectives();
   const todayIndex = parseISO(todayISO()).getDay() - 1;
   const current = index => index === todayIndex ? "day-current" : "";
@@ -256,6 +258,29 @@ function renderTimetable() {
     localStorage.setItem(ELECTIVE_KEY, JSON.stringify(next));
     renderTimetable();
   }));
+}
+// 학번(2308) 또는 번호(8)로 저장된 선택 과목을 불러온다
+function applyStudentNumber(input) {
+  const status = $("studentStatus");
+  if (!timetable) return;
+  const digits = String(input).replace(/\D/g, "");
+  const number = digits.length <= 2 && digits ? `${timetable.grade}${timetable.class}${digits.padStart(2, "0")}` : digits;
+  const picks = timetable.students?.[number];
+  if (!picks) {
+    if (status) status.textContent = digits ? "명단에 없는 학번입니다. 아래에서 직접 골라 주세요." : "학번을 입력해 주세요.";
+    return;
+  }
+  localStorage.setItem(ELECTIVE_KEY, JSON.stringify(picks));
+  localStorage.setItem(STUDENT_KEY, number);
+  if ($("studentNumber")) $("studentNumber").value = number;
+  if (status) status.textContent = `${number} 시간표를 불러와 이 기기에 저장했습니다.`;
+  renderTimetable();
+}
+function setupTimetableForm() {
+  $("studentForm")?.addEventListener("submit", event => {
+    event.preventDefault();
+    applyStudentNumber($("studentNumber")?.value || "");
+  });
 }
 async function loadTimetable() {
   try {
@@ -503,6 +528,7 @@ function startApp() {
   setupNavigation();
   setupMealButtons();
   setupCalendarButtons();
+  setupTimetableForm();
   renderMeals();
   renderWeek();
   renderCalendar();

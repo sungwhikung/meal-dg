@@ -50,6 +50,8 @@ for (const day of DAYS) {
   }
 }
 
-const output = { grade: GRADE, class: CLASS, source: "hj-zio/nsdg-do-v1", groups, slots };
+// 학번별 선택 과목(students)은 원본 DB에서 따로 옮긴 값이라 다시 뽑을 때 그대로 둔다
+const previous = fs.existsSync("timetable.json") ? JSON.parse(fs.readFileSync("timetable.json", "utf8")) : {};
+const output = { grade: GRADE, class: CLASS, source: "hj-zio/nsdg-do-v1", groups, slots, students: previous.students || {} };
 fs.writeFileSync("timetable.json", JSON.stringify(output, null, 1) + "\n");
 console.log(groups);

@@ -56,7 +56,12 @@
       <div class="table-wrap"><table class="time-table"><thead id="timetableHead"></thead><tbody id="timetableBody"></tbody></table></div>
       <div class="panel elective-panel">
         <div class="panel-heading"><h3>내 선택 과목</h3><span class="private-label">이 기기에만 저장</span></div>
-        <p class="muted">그룹마다 듣는 과목을 고르면 시간표에 채워집니다.</p>
+        <p class="muted">학번을 넣으면 내 과목이 한 번에 채워집니다. 아래에서 직접 고쳐도 됩니다.</p>
+        <form id="studentForm" class="student-form">
+          <input id="studentNumber" inputmode="numeric" maxlength="4" placeholder="학번 (예: 2308)" aria-label="학번">
+          <button class="button button-primary" type="submit">불러오기</button>
+        </form>
+        <p id="studentStatus" class="status-text" aria-live="polite"></p>
         <div id="electiveForm" class="elective-grid"></div>
       </div>
     </section>
