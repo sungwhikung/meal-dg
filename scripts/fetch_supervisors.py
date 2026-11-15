@@ -102,12 +102,21 @@ def supervisor_of(summary):
 
 events = fetch_events()
 supervisors = {}
+school_events = []
 samples = 0
 
 for event in events:
-    summary = event.get("summary", "")
+    summary = event.get("summary", "").strip()
 
     if KEYWORD not in summary:
+        # 자습 감독이 아닌 일정(시험, 행사 등)은 학사일정과 D-day에 쓴다
+        days = list(event_days(event))
+        if summary and days:
+            school_events.append({
+                "title": summary,
+                "start": days[0],
+                "end": days[-1]
+            })
         continue
 
     name = supervisor_of(summary)
@@ -133,8 +142,19 @@ output_path.write_text(
     encoding="utf-8"
 )
 
+events_path = Path("events.json")
+events_path.write_text(
+    json.dumps(
+        {"updatedAt": output["updatedAt"], "events": school_events},
+        ensure_ascii=False,
+        indent=2
+    ),
+    encoding="utf-8"
+)
+
 print(f"조회 기간: {start_date} ~ {end_date}")
 print(f"캘린더 일정 수: {len(events)}")
 print(f"'{KEYWORD}' 일정 수: {samples}")
 print(f"{GRADE}학년 자습 감독이 있는 날: {len(supervisors)}")
-print(f"저장 위치: {output_path}")
+print(f"그 밖의 일정 수: {len(school_events)}")
+print(f"저장 위치: {output_path}, {events_path}")

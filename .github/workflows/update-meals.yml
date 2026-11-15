@@ -48,6 +48,7 @@ jobs:
 
           git add meals.json schedule.json
           if [ -f supervisors.json ]; then git add supervisors.json; fi
+          if [ -f events.json ]; then git add events.json; fi
 
           if ! git diff --cached --quiet; then
             git commit -m "Update school meals and schedule"
