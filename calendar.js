@@ -329,11 +329,112 @@ async function loadSchedules() {
       title: item.EVENT_NM ?? item.title ?? item.event ?? item.SCHUL_NM ?? "학교 일정",
       content: item.EVENT_CNTNT ?? item.content ?? item.description ?? ""
     })).filter(item => /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+    schedules.push(...await loadCalendarEvents());
   } catch (error) {
     console.warn("[대건밀] schedule.json을 불러오지 못했습니다. 일정 목록은 비어 있을 수 있습니다.", error);
     schedules = [];
   }
   renderCalendar();
+  renderDdays();
+}
+// 학교 구글 캘린더 일정 중 2학년과 관계있는 것만 학사일정에 합친다
+const MY_GRADE = 2;
+async function loadCalendarEvents() {
+  try {
+    const response = await fetch("./events.json", { cache: "no-cache" });
+    if (!response.ok) throw new Error(`events.json HTTP ${response.status}`);
+    const json = await response.json();
+    const known = new Set(schedules.map(item => `${item.date} ${item.title}`));
+    return (json.events || []).flatMap(event => {
+      const grades = event.title.match(/^([\d,\s]+)학년\s*[:：]/)?.[1];
+      if (grades && !grades.includes(String(MY_GRADE))) return [];
+      if (/교직원|연수|시험장/.test(event.title)) return [];
+      const title = event.title.replace(/^(전학년|[\d,\s]+학년)\s*[:：]\s*/, "");
+      const days = [];
+      for (let day = event.start; day <= event.end; day = shiftDate(day, 1)) days.push(day);
+      return days.filter(day => !known.has(`${day} ${title}`)).map(day => ({ date: day, title, content: "" }));
+    });
+  } catch (error) {
+    console.warn("[대건밀] events.json을 불러오지 못했습니다.", error);
+    return [];
+  }
+}
+
+/* D-day: 학사일정의 시험 + 이 기기에 저장한 내 D-day */
+const DDAY_KEY = "daegeonDdays";
+const EXAM_PATTERN = /고사|지필|시험|수능|평가/;
+function getMyDdays() {
+  try {
+    const list = JSON.parse(localStorage.getItem(DDAY_KEY) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+function daysUntil(date) {
+  return Math.round((parseISO(date) - parseISO(todayISO())) / 864e5);
+}
+function renderDdays() {
+  const list = $("ddayList");
+  if (!list) return;
+  const today = todayISO();
+  const seen = new Set();
+  const exams = schedules
+    .filter(item => item.date >= today && EXAM_PATTERN.test(item.title))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(item => ({ title: /대학수학능력시험/.test(item.title) ? "수능" : item.title, date: item.date }))
+    .filter(item => !seen.has(item.title) && seen.add(item.title))
+    .slice(0, 2);
+  const mine = getMyDdays().filter(item => item.date >= today).map((item, index) => ({ ...item, index }));
+  const items = [...exams, ...mine].sort((a, b) => a.date.localeCompare(b.date));
+  list.innerHTML = items.map(item => {
+    const left = daysUntil(item.date);
+    const remove = item.index === undefined ? "" : `<button type="button" class="dday-remove" data-title="${escapeHTML(item.title)}" data-date="${item.date}" aria-label="${escapeHTML(item.title)} 삭제">×</button>`;
+    return `<span class="dday-chip" title="${formatDate(item.date)}">${escapeHTML(item.title)}<strong>${left === 0 ? "D-DAY" : `D-${left}`}</strong>${remove}</span>`;
+  }).join("");
+  list.querySelectorAll(".dday-remove").forEach(button => button.addEventListener("click", () => {
+    const next = getMyDdays().filter(item => !(item.title === button.dataset.title && item.date === button.dataset.date));
+    localStorage.setItem(DDAY_KEY, JSON.stringify(next));
+    renderDdays();
+  }));
+}
+function setupDdayForm() {
+  $("ddayToggle")?.addEventListener("click", () => {
+    const form = $("ddayForm");
+    if (!form) return;
+    form.hidden = !form.hidden;
+    if (!form.hidden) $("ddayTitle")?.focus();
+  });
+  $("ddayForm")?.addEventListener("submit", event => {
+    event.preventDefault();
+    const title = $("ddayTitle")?.value.trim();
+    const date = $("ddayDate")?.value;
+    if (!title || !date) return;
+    localStorage.setItem(DDAY_KEY, JSON.stringify([...getMyDdays(), { title, date }]));
+    $("ddayTitle").value = "";
+    $("ddayDate").value = "";
+    $("ddayForm").hidden = true;
+    renderDdays();
+  });
+}
+
+/* 홈 화면 설치(PWA): 오프라인에서도 마지막으로 본 내용을 보여 준다 */
+function setupInstall() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(error => console.warn("[대건밀] 서비스 워커 등록 실패:", error));
+  }
+  let installPrompt = null;
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    installPrompt = event;
+    if ($("installButton")) $("installButton").hidden = false;
+  });
+  $("installButton")?.addEventListener("click", async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    $("installButton").hidden = true;
+  });
+  window.addEventListener("appinstalled", () => { if ($("installButton")) $("installButton").hidden = true; });
 }
 function getPersonalMemos() {
   try { return JSON.parse(localStorage.getItem("daegeonPersonalMemos") || "{}"); }
@@ -552,6 +653,9 @@ function startApp() {
   setupMealButtons();
   setupCalendarButtons();
   setupTimetableForm();
+  setupDdayForm();
+  setupInstall();
+  renderDdays();
   renderMeals();
   renderWeek();
   renderCalendar();
